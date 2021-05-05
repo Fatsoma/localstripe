@@ -37,6 +37,14 @@ def register_webhook(id, url, secret, events):
     _webhooks[id] = Webhook(url, secret, events)
 
 
+def unregister_webhook(id):
+    del _webhooks[id]
+
+
+def list_webhooks():
+    return _webhooks
+
+
 async def _send_webhook(event):
     payload = json.dumps(event._export(), indent=2, sort_keys=True)
     payload = payload.encode('utf-8')

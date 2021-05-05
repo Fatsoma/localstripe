@@ -26,7 +26,8 @@ import time
 from dateutil.relativedelta import relativedelta
 
 from .errors import UserError
-from .webhooks import schedule_webhook
+from .webhooks import schedule_webhook, register_webhook, unregister_webhook, \
+    list_webhooks
 
 
 # Save built-in keyword `type`, because some classes override it by using
@@ -3175,3 +3176,68 @@ class Token(StripeObject):
 
         self.type = 'card'
         self.card = card_obj
+
+
+class WebhookEndpoint(StripeObject):
+    object = 'webhook_endpoint'
+    _id_prefix = 'we_'
+    _secret_prefix = 'whsec_'
+
+    def __init__(self, id=None, url=None, enabled_events=None,
+                 api_version=None, description=None, application=None,
+                 status=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        super().__init__()
+
+        self.id = id
+        self.url = url
+        self.enabled_events = enabled_events or []
+        self.api_version = api_version
+        self.description = description or ''
+        self.application = application
+        self.status = status or 'enabled'
+
+    @classmethod
+    def _api_create(cls, **data):
+        obj = super()._api_create(**data)
+
+        obj.secret = getattr(obj, '_secret_prefix') + random_id(14)
+        register_webhook(obj.id, obj.url, obj.secret, obj.enabled_events)
+        return obj
+
+    @classmethod
+    def _api_update(cls, **data):
+        obj = super()._api_update(**data)
+
+        register_webhook(obj.id, obj.url, obj.secret, obj.enabled_events)
+        return obj
+
+    @classmethod
+    def _api_retrieve(cls, id):
+        obj = list_webhooks().get(id)
+
+        if obj is None:
+            raise UserError(404, 'Not Found')
+
+        return WebhookEndpoint(id=id, url=obj.url, enabled_events=obj.events)
+
+    @classmethod
+    def _api_delete(cls, id):
+        if id not in list_webhooks().keys():
+            raise UserError(404, 'Not Found')
+        unregister_webhook(id)
+
+    @classmethod
+    def _api_list_all(cls, url, limit=None, starting_after=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        webhooks = list_webhooks()
+
+        li = List(url, limit=limit, starting_after=starting_after)
+        li._list = [WebhookEndpoint(id=id, url=w.url,
+                                    enabled_events=w.events)
+                    for id, w in webhooks.items()]
+        return li
