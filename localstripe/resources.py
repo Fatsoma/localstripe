@@ -175,12 +175,13 @@ class StripeObject(object):
         # Do not modify object during checks -> do two loops
         for key, value in data.items():
             if key.startswith('_') or not hasattr(self, key):
-                raise UserError(400, 'Bad request')
+                raise UserError(
+                    400, 'Bad request: field %s not recognised' % key)
         # Treat metadata differently: do not delete absent fields
         metadata = data.pop('metadata', None)
         if metadata:
             if type(metadata) is not dict:
-                raise UserError(400, 'Bad request')
+                raise UserError(400, 'Bad request: invalid metadata')
             self.metadata = self.metadata or {}
             for key, value in metadata.items():
                 self.metadata[key] = value
@@ -191,10 +192,10 @@ class StripeObject(object):
         try:
             if expand is None:
                 expand = []
-            assert type(expand) is list
-            assert all([type(e) is str for e in expand])
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(expand) is list, 'invalid expand'
+            assert all([type(e) is str for e in expand]), 'invalid expand'
+        except AssertionError as ex:
+            raise UserError(400, 'Bad request') from ex
 
         if any(len(path.split('.')) > 4 for path in expand):
             raise UserError(
@@ -270,32 +271,43 @@ class Account(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type in ('custom', 'express', 'standard')
-            assert country is None or _type(country) is str
-            assert email is None or _type(email) is str
+            assert type in ('custom', 'express', 'standard'), 'invalid type'
+            assert country is None or _type(country) is str, 'invalid country'
+            assert email is None or _type(email) is str, 'invalid email'
             if type == 'custom':
-                assert capabilities is not None
+                assert capabilities is not None, \
+                    'custom account type must specify capabilities'
             if capabilities is not None:
-                assert _type(capabilities) is dict
+                assert _type(capabilities) is dict, \
+                    'invalid capabilities'
                 assert set(capabilities.values()).issubset({
-                    'active', 'inactive', 'pending'})
+                    'active', 'inactive', 'pending'}), \
+                    'invalid capabilities'
             assert business_type is None or \
                 business_type in ('individual', 'company', 'non_profit',
-                                  'government_entity')
+                                  'government_entity'), \
+                'invalid business_type'
             assert company is None or _type(company) is dict, 'invalid company'
-            assert individual is None or _type(individual) is dict
-            assert metadata is None or _type(metadata) is dict
-            assert tos_acceptance is None or _type(tos_acceptance) is dict
+            assert individual is None or _type(individual) is dict, \
+                'invalid individual'
+            assert metadata is None or _type(metadata) is dict, \
+                'invalid metadata'
+            assert tos_acceptance is None or _type(tos_acceptance) is dict, \
+                'invalid tos_acceptance'
             assert business_profile is None or \
-                _type(business_profile) is dict
+                _type(business_profile) is dict, 'invalid business_profile'
             assert default_currency is None or \
-                _type(default_currency) is str
-            assert documents is None or _type(documents) is dict
+                _type(default_currency) is str, 'invalid default_currency'
+            assert documents is None or _type(documents) is dict, \
+                'invalid documents'
             if external_accounts is not None:
-                assert _type(external_accounts) is list
+                assert _type(external_accounts) is list, \
+                    'invalid external_accounts'
                 assert all(_type(v) is dict
-                           for v in external_accounts.values())
-            assert settings is None or _type(settings) is dict
+                           for v in external_accounts.values()), \
+                    'invalid external_accounts'
+            assert settings is None or _type(settings) is dict, \
+                'invalid settings'
         except AssertionError as e:
             raise UserError(400, 'Bad request') from e
 
@@ -417,22 +429,25 @@ class BalanceTransaction(StripeObject):
         amount = try_convert_to_int(amount)
         exchange_rate = try_convert_to_float(exchange_rate)
         try:
-            assert _type(amount) is int
-            assert _type(currency) is str and currency
-            assert description is None or _type(description) is str
-            assert exchange_rate is None or _type(exchange_rate) is float
-            assert reporting_category in ('charge', 'refund')
-            assert _type(source) is str
-            assert type in ('charge', 'refund')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert _type(amount) is int, 'invalid amount'
+            assert _type(currency) is str and currency, 'invalid currency'
+            assert description is None or _type(description) is str, \
+                'invalid description'
+            assert exchange_rate is None or _type(exchange_rate) is float, \
+                'invalid exchange_rate'
+            assert reporting_category in ('charge', 'refund'), \
+                'invalid reporting_category'
+            assert _type(source) is str, 'invalid source'
+            assert type in ('charge', 'refund'), 'invalid type'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         if source.startswith('ch_'):
             Charge._api_retrieve(source)  # to return 404 if not existent
         elif source.startswith('re_'):
             Refund._api_retrieve(source)  # to return 404 if not existent
         else:
-            raise UserError(400, 'Bad request')
+            raise UserError(400, 'Bad request: unknown source prefix')
 
         # All exceptions must be raised before this point
         super().__init__()
@@ -489,8 +504,8 @@ class Card(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type(source) is dict
-            assert source.get('object') == 'card'
+            assert type(source) is dict, 'invalid source'
+            assert source.get('object') == 'card', 'invalid source.object'
             number = source.get('number')
             exp_month = try_convert_to_int(source.get('exp_month'))
             exp_year = try_convert_to_int(source.get('exp_year'))
@@ -502,16 +517,19 @@ class Card(StripeObject):
             address_state = source.get('address_state')
             address_zip = source.get('address_zip')
             name = source.get('name')
-            assert type(number) is str and len(number) == 16
-            assert type(exp_month) is int
-            assert exp_month >= 1 and exp_month <= 12
-            assert type(exp_year) is int
+            assert type(number) is str and len(number) == 16, \
+                'invalid source.number'
+            assert type(exp_month) is int, 'invalid source.exp_month'
+            assert exp_month >= 1 and exp_month <= 12, \
+                'invalid source.exp_month'
+            assert type(exp_year) is int, 'invalid source.exp_year'
             if exp_year > 0 and exp_year < 100:
                 exp_year += 2000
-            assert exp_year >= 2017 and exp_year <= 2100
-            assert type(cvc) is str and len(cvc) == 3
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert exp_year >= 2017 and exp_year <= 2100, \
+                'invalid source.exp_year'
+            assert type(cvc) is str and len(cvc) == 3, 'invalid source.cvc'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -569,23 +587,27 @@ class Charge(StripeObject):
         amount = try_convert_to_int(amount)
         capture = try_convert_to_bool(capture)
         try:
-            assert type(amount) is int and amount >= 0
-            assert type(currency) is str and currency
+            assert type(amount) is int and amount >= 0, 'invalid amount'
+            assert type(currency) is str and currency, 'invalid currency'
             if description is not None:
-                assert type(description) is str
+                assert type(description) is str, 'invalid description'
             if customer is not None:
-                assert type(customer) is str and customer.startswith('cus_')
+                assert type(customer) is str and customer.startswith('cus_'), \
+                    'invalid customer'
             if source is not None:
-                assert type(source) is str
+                assert type(source) is str, 'invalid source'
                 assert (source.startswith('pm_') or source.startswith('src_')
-                        or source.startswith('card_'))
-            assert type(capture) is bool
+                        or source.startswith('card_')), 'invalid source'
+            assert type(capture) is bool, 'invalid capture'
             if statement_descriptor is not None:
-                assert type(statement_descriptor) is str
-                assert len(statement_descriptor) <= 22
-                assert re.search('[a-zA-Z]', statement_descriptor)
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(statement_descriptor) is str, \
+                    'invalid statement_descriptor'
+                assert len(statement_descriptor) <= 22, \
+                    'invalid statement_descriptor'
+                assert re.search('[a-zA-Z]', statement_descriptor), \
+                    'invalid statement_descriptor'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         if source is None:
             customer_obj = Customer._api_retrieve(customer)
@@ -690,9 +712,9 @@ class Charge(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type(id) is str and id.startswith('ch_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(id) is str and id.startswith('ch_'), 'invalid id'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
 
@@ -701,10 +723,11 @@ class Charge(StripeObject):
 
         amount = try_convert_to_int(amount)
         try:
-            assert type(amount) is int and 0 <= amount <= obj.amount
-            assert obj.captured is False
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(amount) is int and 0 <= amount <= obj.amount, \
+                'invalid amount'
+            assert obj.captured is False, 'invalid captured'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         def on_success():
             obj.captured = True
@@ -737,18 +760,21 @@ class Charge(StripeObject):
                       starting_after=None):
         try:
             if customer is not None:
-                assert type(customer) is str and customer.startswith('cus_')
+                assert type(customer) is str and customer.startswith('cus_'), \
+                    'invalid customer'
             if created is not None:
-                assert type(created) in (dict, str)
+                assert type(created) in (dict, str), 'invalid created'
                 if type(created) is dict:
                     assert len(created.keys()) == 1 and \
-                        list(created.keys())[0] in ('gt', 'gte', 'lt', 'lte')
+                        list(created.keys())[0] in \
+                        ('gt', 'gte', 'lt', 'lte'), 'invalid created'
                     date = try_convert_to_int(list(created.values())[0])
                 elif type(created) is str:
                     date = try_convert_to_int(created)
-                assert type(date) is int and date > 1500000000
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(date) is int and date > 1500000000, \
+                    'invalid created'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         if customer:
             Customer._api_retrieve(customer)  # to return 404 if not existant
@@ -784,21 +810,26 @@ class Coupon(StripeObject):
         percent_off = try_convert_to_float(percent_off)
         duration_in_months = try_convert_to_int(duration_in_months)
         try:
-            assert type(id) is str and id
-            assert (amount_off is None) != (percent_off is None)
+            assert type(id) is str and id, 'invalid id'
+            assert (amount_off is None) != (percent_off is None), \
+                'invalid amount_off'
             if amount_off is not None:
-                assert type(amount_off) is int and amount_off >= 0
+                assert type(amount_off) is int and amount_off >= 0, \
+                    'invalid amount_off'
             if percent_off is not None:
-                assert type(percent_off) is float
-                assert percent_off >= 0 and percent_off <= 100
-            assert duration in ('forever', 'once', 'repeating')
+                assert type(percent_off) is float, 'invalid percent_off'
+                assert percent_off >= 0 and percent_off <= 100, \
+                    'invalid percent_off'
+            assert duration in ('forever', 'once', 'repeating'), \
+                'invalid duration'
             if amount_off is not None:
-                assert type(currency) is str and currency
+                assert type(currency) is str and currency, 'invalid currency'
             if duration == 'repeating':
-                assert type(duration_in_months) is int
-                assert duration_in_months > 0
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(duration_in_months) is int, \
+                    'invalid duration_in_months'
+                assert duration_in_months > 0, 'invalid duration_in_months'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__(id)
@@ -829,43 +860,51 @@ class Customer(StripeObject):
 
         try:
             if name is not None:
-                assert type(name) is str
+                assert type(name) is str, 'invalid name'
             if description is not None:
-                assert type(description) is str
+                assert type(description) is str, 'invalid description'
             if email is not None:
-                assert type(email) is str
+                assert type(email) is str, 'invalid email'
             if phone is not None:
-                assert type(phone) is str
+                assert type(phone) is str, 'invalid phone'
             if address is not None:
-                assert type(address) is dict
+                assert type(address) is dict, 'invalid address'
                 assert set(address.keys()).issubset({
                     'city', 'country', 'line1', 'line2', 'postal_code',
-                    'state'})
-                assert all(type(f) is str for f in address.values())
+                    'state'}), 'invalid address key'
+                assert all(type(f) is str for f in address.values()), \
+                    'invalid address value'
             if invoice_settings is None:
                 invoice_settings = {}
-            assert type(invoice_settings) is dict
+            assert type(invoice_settings) is dict, 'invalid invoice_settings'
             if 'default_payment_method' not in invoice_settings:
                 invoice_settings['default_payment_method'] = None
             if invoice_settings['default_payment_method'] is not None:
-                assert type(invoice_settings['default_payment_method']) is str
+                assert type(invoice_settings['default_payment_method']) \
+                    is str, 'invalid invoice_settings default_payment_method'
                 assert (invoice_settings['default_payment_method']
-                        .startswith('pm_'))
+                        .startswith('pm_')), \
+                    'invalid invoice_settings default_payment_method'
             if business_vat_id is not None:
-                assert type(business_vat_id) is str
+                assert type(business_vat_id) is str, 'invalid business_vat_id'
             if preferred_locales is not None:
-                assert type(preferred_locales) is list
-                assert all(type(lo) is str for lo in preferred_locales)
+                assert type(preferred_locales) is list, \
+                    'invalid preferred_locales'
+                assert all(type(lo) is str for lo in preferred_locales), \
+                    'invalid preferred_locales'
             if tax_id_data is None:
                 tax_id_data = []
-            assert type(tax_id_data) is list
+            assert type(tax_id_data) is list, 'invalid tax_id_data'
             for data in tax_id_data:
-                assert type(data) is dict
-                assert set(data.keys()) == {'type', 'value'}
-                assert data['type'] in ('eu_vat', 'nz_gst', 'au_abn')
-                assert type(data['value']) is str and len(data['value']) > 10
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(data) is dict, 'invalid tax_id_data'
+                assert set(data.keys()) == {'type', 'value'}, \
+                    'invalid tax_id_data'
+                assert data['type'] in ('eu_vat', 'nz_gst', 'au_abn'), \
+                    'invalid tax_id_data'
+                assert type(data['value']) is str and \
+                    len(data['value']) > 10, 'invalid tax_id_data'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -952,7 +991,7 @@ class Customer(StripeObject):
             if source_obj.customer != id:
                 raise UserError(404, 'This customer does not own this card')
         else:
-            raise UserError(400, 'Bad request')
+            raise UserError(400, 'Bad request: unknown source prefix')
 
         return source_obj
 
@@ -968,11 +1007,11 @@ class Customer(StripeObject):
 
         try:
             if type(source) is str:
-                assert source[:4] in ('src_', 'tok_')
+                assert source[:4] in ('src_', 'tok_'), 'invalid source'
             else:
-                assert type(source) is dict
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(source) is dict, 'invalid source'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
 
@@ -1021,10 +1060,10 @@ class Customer(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type in ('eu_vat', 'nz_gst', 'au_abn')
-            assert _type(value) is str and len(value) > 10
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type in ('eu_vat', 'nz_gst', 'au_abn'), 'invalid type'
+            assert _type(value) is str and len(value) > 10, 'invalid value'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
 
@@ -1142,27 +1181,31 @@ class Invoice(StripeObject):
         tax_percent = try_convert_to_float(tax_percent)
         date = try_convert_to_int(date)
         try:
-            assert type(customer) is str and customer.startswith('cus_')
+            assert type(customer) is str and customer.startswith('cus_'), \
+                'invalid customer'
             if subscription is not None:
-                assert type(subscription) is str
-                assert subscription.startswith('sub_')
+                assert type(subscription) is str, 'invalid subscription'
+                assert subscription.startswith('sub_'), 'invalid subscription'
             if date is not None:
-                assert type(date) is int and date > 1500000000
+                assert type(date) is int and date > 1500000000, 'invalid date'
             else:
                 date = int(time.time())
             if description is not None:
-                assert type(description) is str
+                assert type(description) is str, 'invalid description'
             if tax_percent is not None:
-                assert default_tax_rates is None
-                assert type(tax_percent) is float
-                assert tax_percent >= 0 and tax_percent <= 100
+                assert default_tax_rates is None, 'invalid default_tax_rates'
+                assert type(tax_percent) is float, 'invalid tax_percent'
+                assert tax_percent >= 0 and tax_percent <= 100, \
+                    'invalid tax_percent'
             if default_tax_rates is not None:
-                assert tax_percent is None
-                assert type(default_tax_rates) is list
+                assert tax_percent is None, 'invalid tax_percent'
+                assert type(default_tax_rates) is list, \
+                    'invalid default_tax_rates'
                 assert all(type(txr) is str and txr.startswith('txr_')
-                           for txr in default_tax_rates)
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                           for txr in default_tax_rates), \
+                    'invalid default_tax_rates'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         Customer._api_retrieve(customer)  # to return 404 if not existant
 
@@ -1299,12 +1342,14 @@ class Invoice(StripeObject):
                 return pi.charges._list[-1]
 
     def _finalize(self):
-        assert self.status == 'draft'
+        assert self.status == 'draft', \
+            'cannot transition from status %s' % self.status
         self._draft = False
         self.status_transitions['finalized_at'] = int(time.time())
 
     def _on_payment_success(self):
-        assert self.status == 'paid'
+        assert self.status == 'paid', \
+            'cannot transition from status %s' % self.status
         self.status_transitions['paid_at'] = int(time.time())
         schedule_webhook(Event('invoice.payment_succeeded', self))
         if self.subscription:
@@ -1312,7 +1357,8 @@ class Invoice(StripeObject):
             sub._on_initial_payment_success(self)
 
     def _on_payment_failure_now(self):
-        assert self.status in ('open', 'void')
+        assert self.status in ('open', 'void'), \
+            'cannot transition from status %s' % self.status
         if self.status == 'void':
             self.status_transitions['voided_at'] = int(time.time())
         schedule_webhook(Event('invoice.payment_failed', self))
@@ -1324,7 +1370,8 @@ class Invoice(StripeObject):
                 sub._on_recurring_payment_failure(self)
 
     def _on_payment_failure_later(self):
-        assert self.status in ('open', 'void')
+        assert self.status in ('open', 'void'), \
+            'cannot transition from status %s' % self.status
         if self.status == 'void':
             self.status_transitions['voided_at'] = int(time.time())
         schedule_webhook(Event('invoice.payment_failed', self))
@@ -1351,31 +1398,45 @@ class Invoice(StripeObject):
         subscription_proration_date = \
             try_convert_to_int(subscription_proration_date)
         try:
-            assert type(customer) is str and customer.startswith('cus_')
+            assert type(customer) is str and customer.startswith('cus_'), \
+                'invalid customer'
             if default_tax_rates is not None:
-                assert type(default_tax_rates) is list
+                assert type(default_tax_rates) is list, \
+                    'invalid default_tax_rates'
                 assert all(type(txr) is str and txr.startswith('txr_')
-                           for txr in default_tax_rates)
+                           for txr in default_tax_rates), \
+                    'invalid default_tax_rates'
             if subscription_items is not None:
-                assert type(subscription_items) is list
+                assert type(subscription_items) is list, \
+                    'invalid subscription_items'
                 for si in subscription_items:
-                    assert type(si.get('plan')) is str
+                    assert type(si.get('plan')) is str, \
+                        'invalid subscription_items plan'
                     si['tax_rates'] = si.get('tax_rates')
                     if si['tax_rates'] is not None:
-                        assert type(si['tax_rates']) is list
-                        assert all(type(tr) is str for tr in si['tax_rates'])
+                        assert type(si['tax_rates']) is list, \
+                            'invalid subscription_items tax_rates'
+                        assert all(type(tr) is str
+                                   for tr in si['tax_rates']), \
+                            'invalid subscription_items tax_rates'
                 if subscription_default_tax_rates is not None:
-                    assert subscription_tax_percent is None
-                    assert type(subscription_default_tax_rates) is list
+                    assert subscription_tax_percent is None, \
+                        'invalid subscription_default_tax_rates'
+                    assert type(subscription_default_tax_rates) is list, \
+                        'invalid subscription_default_tax_rates'
                     assert all(type(txr) is str and txr.startswith('txr_')
-                               for txr in subscription_default_tax_rates)
+                               for txr in subscription_default_tax_rates), \
+                        'invalid subscription_default_tax_rates'
                     assert all(type(tr) is str
-                               for tr in subscription_default_tax_rates)
+                               for tr in subscription_default_tax_rates), \
+                        'invalid subscription_default_tax_rates'
             if subscription_proration_date is not None:
-                assert type(subscription_proration_date) is int
-                assert subscription_proration_date > 1500000000
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(subscription_proration_date) is int, \
+                    'invalid subscription_proration_date'
+                assert subscription_proration_date > 1500000000, \
+                    'invalid subscription_proration_date'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # return 404 if not existant
         customer_obj = Customer._api_retrieve(customer)
@@ -1395,7 +1456,9 @@ class Invoice(StripeObject):
             if ii.invoice is None]
         if (not upcoming and not subscription and
                 not subscription_items and not pending_items):
-            raise UserError(400, 'Bad request')
+            raise UserError(
+                400, 'Bad request: need one of upcoming, subscription, ' +
+                     'subscription_items, pending_items')
 
         simulation = subscription_items is not None or \
             subscription_prorate is not None or \
@@ -1512,7 +1575,8 @@ class Invoice(StripeObject):
     def _api_delete(cls, id):
         obj = cls._api_retrieve(id)
         if obj.status != 'draft':
-            raise UserError(400, 'Bad request')
+            raise UserError(
+                400, 'Bad request: can only delete if status is draft.')
 
         return super()._api_delete(id)
 
@@ -1521,12 +1585,13 @@ class Invoice(StripeObject):
                       starting_after=None):
         try:
             if customer is not None:
-                assert type(customer) is str and customer.startswith('cus_')
+                assert type(customer) is str and customer.startswith('cus_'), \
+                    'invalid customer'
             if subscription is not None:
-                assert type(subscription) is str
-                assert subscription.startswith('sub_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(subscription) is str, 'invalid subscription'
+                assert subscription.startswith('sub_'), 'invalid subscription'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         li = super(Invoice, cls)._api_list_all(url, limit=limit,
                                                starting_after=starting_after)
@@ -1571,7 +1636,7 @@ class Invoice(StripeObject):
         if obj.status == 'paid':
             raise UserError(400, 'Invoice is already paid')
         elif obj.status not in ('draft', 'open'):
-            raise UserError(400, 'Bad request')
+            raise UserError(400, 'Bad request: status must be draft or open')
 
         obj._draft = False
 
@@ -1597,7 +1662,7 @@ class Invoice(StripeObject):
         obj = Invoice._api_retrieve(id)
 
         if obj.status not in ('draft', 'open'):
-            raise UserError(400, 'Bad request')
+            raise UserError(400, 'Bad request: status must be draft or open')
 
         PaymentIntent._api_cancel(obj.payment_intent)
 
@@ -1648,30 +1713,35 @@ class InvoiceItem(StripeObject):
         proration = try_convert_to_bool(proration)
         try:
             if invoice is not None:
-                assert type(invoice) is str and invoice.startswith('in_')
+                assert type(invoice) is str and invoice.startswith('in_'), \
+                    'invalid invoice'
             if subscription is not None:
-                assert type(subscription) is str
-                assert subscription.startswith('sub_')
+                assert type(subscription) is str, 'invalid subscription'
+                assert subscription.startswith('sub_'), 'invalid subscription'
             if plan is not None:
-                assert type(plan) is str and plan
-            assert type(amount) is int
-            assert type(currency) is str and currency
-            assert type(customer) is str and customer.startswith('cus_')
+                assert type(plan) is str and plan, 'invalid plan'
+            assert type(amount) is int, 'invalid amount'
+            assert type(currency) is str and currency, 'invalid currency'
+            assert type(customer) is str and customer.startswith('cus_'), \
+                'invalid customer'
             if period_start is not None:
-                assert type(period_start) is int and period_start > 1500000000
-                assert type(period_end) is int and period_end > 1500000000
+                assert type(period_start) is int and \
+                    period_start > 1500000000, 'invalid period_start'
+                assert type(period_end) is int and \
+                    period_end > 1500000000, 'invalid period_end'
             else:
                 period_start = period_end = int(time.time())
-            assert type(proration) is bool
+            assert type(proration) is bool, 'invalid proration'
             if description is not None:
-                assert type(description) is str
+                assert type(description) is str, 'invalid description'
             else:
                 description = 'Invoice item'
             if tax_rates is not None:
-                assert type(tax_rates) is list
-                assert all(type(tr) is str for tr in tax_rates)
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(tax_rates) is list, 'invalid tax_rates'
+                assert all(type(tr) is str for tr in tax_rates), \
+                    'invalid tax_rates'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         Customer._api_retrieve(customer)  # to return 404 if not existant
         if invoice is not None:
@@ -1704,9 +1774,10 @@ class InvoiceItem(StripeObject):
                       starting_after=None):
         try:
             if customer is not None:
-                assert type(customer) is str and customer.startswith('cus_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(customer) is str and customer.startswith('cus_'), \
+                    'invalid customer'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         li = super(InvoiceItem,
                    cls)._api_list_all(url, limit=limit,
@@ -1725,9 +1796,10 @@ class InvoiceLineItem(StripeObject):
 
     def __init__(self, item):
         try:
-            assert isinstance(item, (InvoiceItem, SubscriptionItem))
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert isinstance(item, (InvoiceItem, SubscriptionItem)), \
+                'invalid item'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -1785,11 +1857,13 @@ class List(StripeObject):
         limit = try_convert_to_int(limit)
         limit = 10 if limit is None else limit
         try:
-            assert type(limit) is int and limit > 0
+            assert type(limit) is int, 'invalid limit type %s' % limit
+            assert limit > 0, 'invalid limit, must be greater than 0'
             if starting_after is not None:
-                assert type(starting_after) is str and len(starting_after) > 0
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(starting_after) is str and \
+                    len(starting_after) > 0, 'invalid starting_after'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -1843,17 +1917,19 @@ class PaymentIntent(StripeObject):
         amount = try_convert_to_int(amount)
         try:
             # Invoices with amount == 0 don't create PaymentIntents:
-            assert type(amount) is int and amount > 0
-            assert type(currency) is str and currency
+            assert type(amount) is int and amount > 0, 'invalid amount'
+            assert type(currency) is str and currency, 'invalid currency'
             if customer is not None:
-                assert type(customer) is str and customer.startswith('cus_')
+                assert type(customer) is str and customer.startswith('cus_'), \
+                    'invalid customer'
             if payment_method is not None:
-                assert type(payment_method) is str
+                assert type(payment_method) is str, 'invalid payment_method'
                 assert (payment_method.startswith('pm_') or
                         payment_method.startswith('src_') or
-                        payment_method.startswith('card_'))
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                        payment_method.startswith('card_')), \
+                    'invalid payment_method'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         if customer:
             Customer._api_retrieve(customer)  # to return 404 if not existant
@@ -1879,7 +1955,8 @@ class PaymentIntent(StripeObject):
 
     def _trigger_payment(self):
         if self.status != 'requires_confirmation':
-            raise UserError(400, 'Bad request')
+            raise UserError(
+                400, 'Bad request: status must be requires_confirmation')
 
         def on_success():
             if self.invoice:
@@ -1944,12 +2021,12 @@ class PaymentIntent(StripeObject):
         off_session = try_convert_to_bool(off_session)
         try:
             if confirm is not None:
-                assert type(confirm) is bool
+                assert type(confirm) is bool, 'invalid confirm'
             if off_session is not None:
-                assert type(off_session) is bool
-                assert confirm is True
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(off_session) is bool, 'invalid off_session'
+                assert confirm is True, 'invalid confirm'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = super()._api_create(**data)
 
@@ -1967,14 +2044,15 @@ class PaymentIntent(StripeObject):
             raise UserError(500, 'Not implemented')
 
         try:
-            assert type(id) is str and id.startswith('pi_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(id) is str and id.startswith('pi_'), 'invalid id'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
 
         if obj.status != 'requires_confirmation':
-            raise UserError(400, 'Bad request')
+            raise UserError(
+                400, 'Bad request: status must be requires_confirmation')
 
         obj._authentication_failed = False
         payment_method = PaymentMethod._api_retrieve(obj.payment_method)
@@ -1995,14 +2073,14 @@ class PaymentIntent(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type(id) is str and id.startswith('pi_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(id) is str and id.startswith('pi_'), 'invalid id'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
         if obj.status not in ('requires_payment_method', 'requires_capture',
                               'requires_confirmation', 'requires_action'):
-            raise UserError(400, 'Bad request')
+            raise UserError(400, 'Bad request: invalid status transition')
 
         obj._canceled = True
         obj.next_action = None
@@ -2016,18 +2094,18 @@ class PaymentIntent(StripeObject):
 
         success = try_convert_to_bool(success)
         try:
-            assert type(id) is str and id.startswith('pi_')
-            assert type(client_secret) is str
-            assert type(success) is bool
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(id) is str and id.startswith('pi_'), 'invalid id'
+            assert type(client_secret) is str, 'invalid client_secret'
+            assert type(success) is bool, 'invalid success'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
 
         if client_secret != obj.client_secret:
             raise UserError(401, 'Unauthorized')
         if obj.status != 'requires_action':
-            raise UserError(400, 'Bad request')
+            raise UserError(400, 'Bad request: status must be requires_action')
 
         obj.next_action = None
         if success:
@@ -2059,29 +2137,34 @@ class PaymentMethod(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type in ('card', 'sepa_debit')
-            assert billing_details is None or _type(billing_details) is dict
+            assert type in ('card', 'sepa_debit'), 'invalid type'
+            assert billing_details is None or _type(billing_details) is dict, \
+                'invalid billing_details'
             if type == 'card':
                 assert _type(card) is dict and card.keys() == {
-                    'number', 'exp_month', 'exp_year', 'cvc'}
+                    'number', 'exp_month', 'exp_year', 'cvc'}, 'invalid card'
                 card['exp_month'] = try_convert_to_int(card['exp_month'])
                 card['exp_year'] = try_convert_to_int(card['exp_year'])
-                assert _type(card['number']) is str
-                assert _type(card['exp_month']) is int
-                assert _type(card['exp_year']) is int
-                assert _type(card['cvc']) is str
-                assert len(card['number']) == 16
-                assert card['exp_month'] >= 1 and card['exp_month'] <= 12
+                assert _type(card['number']) is str, 'invalid card.number'
+                assert _type(card['exp_month']) is int, \
+                    'invalid card.exp_month'
+                assert _type(card['exp_year']) is int, 'invalid card.exp_year'
+                assert _type(card['cvc']) is str, 'invalid card.cvc'
+                assert len(card['number']) == 16, 'invalid card.number'
+                assert card['exp_month'] >= 1 and card['exp_month'] <= 12, \
+                    'invalid card.exp_month'
                 if card['exp_year'] > 0 and card['exp_year'] < 100:
                     card['exp_year'] += 2000
-                assert len(card['cvc']) == 3
+                assert len(card['cvc']) == 3, 'invalid card.cvc'
             elif type == 'sepa_debit':
-                assert _type(sepa_debit) is dict
-                assert 'iban' in sepa_debit
-                assert _type(sepa_debit['iban']) is str
-                assert 14 <= len(sepa_debit['iban']) <= 34
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert _type(sepa_debit) is dict, 'invalid sepa_debit'
+                assert 'iban' in sepa_debit, 'invalid sepa_debit'
+                assert _type(sepa_debit['iban']) is str, \
+                    'invalid sepa_debit.iban'
+                assert 14 <= len(sepa_debit['iban']) <= 34, \
+                    'invalid sepa_debit.iban'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         if type == 'card':
             if not (2019 <= card['exp_year'] < 2100):
@@ -2158,10 +2241,11 @@ class PaymentMethod(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type(id) is str and id.startswith('pm_')
-            assert type(customer) is str and customer.startswith('cus_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(id) is str and id.startswith('pm_'), 'invalid id'
+            assert type(customer) is str and customer.startswith('cus_'), \
+                'invalid customer'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
         Customer._api_retrieve(customer)  # to return 404 if not existant
@@ -2179,9 +2263,9 @@ class PaymentMethod(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type(id) is str and id.startswith('pm_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(id) is str and id.startswith('pm_'), 'invalid id'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
         obj.customer = None
@@ -2203,10 +2287,11 @@ class PaymentMethod(StripeObject):
     def _api_list_all(cls, url, customer=None, type=None, limit=None,
                       starting_after=None):
         try:
-            assert _type(customer) is str and customer.startswith('cus_')
-            assert type in ('card', )
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert _type(customer) is str and customer.startswith('cus_'), \
+                'invalid customer'
+            assert type in ('card', ), 'invalid type'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         Customer._api_retrieve(customer)  # to return 404 if not existant
 
@@ -2249,34 +2334,41 @@ class Plan(StripeObject):
         trial_period_days = try_convert_to_int(trial_period_days)
         active = try_convert_to_bool(active)
         try:
-            assert id is None or type(id) is str and id
-            assert type(active) is bool
-            assert billing_scheme in ['per_unit', 'tiered']
+            assert id is None or type(id) is str and id, 'invalid id'
+            assert type(active) is bool, 'invalid active'
+            assert billing_scheme in ['per_unit', 'tiered'], \
+                'invalid billing_scheme'
             if billing_scheme == 'per_unit':
-                assert type(amount) is int and amount >= 0
+                assert type(amount) is int and amount >= 0, 'invalid amount'
             else:
-                assert tiers_mode in ['graduated', 'volume']
-                assert type(tiers) is list and len(tiers) > 0
+                assert tiers_mode in ['graduated', 'volume'], \
+                    'invalid tiers_mode'
+                assert type(tiers) is list and len(tiers) > 0, 'invalid tiers'
                 for t in tiers:
                     assert \
                         type(t) is dict and 'up_to' in t and \
                         (t['up_to'] == 'inf' or
-                         type(try_convert_to_int(t['up_to'])) is int)
+                         type(try_convert_to_int(t['up_to'])) is int), \
+                        'invalid tiers up_to'
                     unit_amount = try_convert_to_int(t.get('unit_amount', 0))
-                    assert type(unit_amount) is int and unit_amount >= 0
+                    assert type(unit_amount) is int and unit_amount >= 0, \
+                        'invalid tiers unit_amount'
                     flat_amount = try_convert_to_int(t.get('flat_amount', 0))
-                    assert type(flat_amount) is int and flat_amount >= 0
-            assert type(currency) is str and currency
-            assert type(interval) is str
-            assert interval in ('day', 'week', 'month', 'year')
-            assert type(interval_count) is int
+                    assert type(flat_amount) is int and flat_amount >= 0, \
+                        'invalid tiers flat_amount'
+            assert type(currency) is str and currency, 'invalid currency'
+            assert type(interval) is str, 'invalid interval'
+            assert interval in ('day', 'week', 'month', 'year'), \
+                'invalid interval'
+            assert type(interval_count) is int, 'invalid interval_count'
             if trial_period_days is not None:
-                assert type(trial_period_days) is int
+                assert type(trial_period_days) is int, \
+                    'invalid trial_period_days'
             if nickname is not None:
-                assert type(nickname) is str
-            assert usage_type in ['licensed', 'metered']
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(nickname) is str, 'invalid nickname'
+            assert usage_type in ['licensed', 'metered'], 'invalid usage_type'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         if type(product) is str:
             Product._api_retrieve(product)  # to return 404 if not existant
@@ -2323,23 +2415,25 @@ class Payout(StripeObject):
 
         amount = try_convert_to_int(amount)
         try:
-            assert type(amount) is int and amount > 0
-            assert currency in ('eur',)
+            assert type(amount) is int and amount > 0, 'invalid amount'
+            assert currency in ('eur',), 'invalid currency'
             if description is not None:
-                assert type(description) is str
+                assert type(description) is str, 'invalid description'
             if metadata is not None:
-                assert type(metadata) is dict
+                assert type(metadata) is dict, 'invalid metadata'
             if statement_descriptor is not None:
                 assert type(statement_descriptor) is str \
-                    and len(statement_descriptor) <= 22
+                    and len(statement_descriptor) <= 22, \
+                    'invalid statement_descriptor'
             if method is not None:
-                assert method in ('standard', 'instant')
+                assert method in ('standard', 'instant'), 'invalid method'
             if source_type is not None:
-                assert type(source_type) is str
+                assert type(source_type) is str, 'invalid source_type'
             if status is not None:
-                assert status in ('paid', 'pending', 'failed')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert status in ('paid', 'pending', 'failed'), \
+                    'invalid status'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -2421,24 +2515,26 @@ class Product(StripeObject):
 
         active = try_convert_to_bool(active)
         try:
-            assert id is None or _type(id) is str and id
-            assert _type(name) is str and name
-            assert type in ('good', 'service')
-            assert _type(active) is bool
+            assert id is None or _type(id) is str and id, 'invalid id'
+            assert _type(name) is str and name, 'invalid name'
+            assert type in ('good', 'service'), 'invalid type'
+            assert _type(active) is bool, 'invalid active'
             if caption is not None:
-                assert _type(caption) is str
+                assert _type(caption) is str, 'invalid caption'
             if description is not None:
-                assert _type(description) is str
+                assert _type(description) is str, 'invalid description'
             if attributes is not None:
-                assert _type(attributes) is list
-            assert _type(shippable) is bool
+                assert _type(attributes) is list, 'invalid attributes'
+            assert _type(shippable) is bool, 'invalid shippable'
             if url is not None:
-                assert _type(url) is str
+                assert _type(url) is str, 'invalid url'
             if statement_descriptor is not None:
-                assert _type(statement_descriptor) is str
-                assert len(statement_descriptor) <= 22
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert _type(statement_descriptor) is str, \
+                    'invalid statement_descriptor'
+                assert len(statement_descriptor) <= 22, \
+                    'invalid statement_descriptor'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__(id)
@@ -2467,11 +2563,12 @@ class Refund(StripeObject):
 
         amount = try_convert_to_int(amount)
         try:
-            assert type(charge) is str and charge.startswith('ch_')
+            assert type(charge) is str and charge.startswith('ch_'), \
+                'invalid charge'
             if amount is not None:
-                assert type(amount) is int and amount > 0
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(amount) is int and amount > 0, 'invalid amount'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         charge_obj = Charge._api_retrieve(charge)
 
@@ -2501,9 +2598,10 @@ class Refund(StripeObject):
     def _api_list_all(cls, url, charge=None, limit=None, starting_after=None):
         try:
             if charge is not None:
-                assert type(charge) is str and charge.startswith('ch_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(charge) is str and charge.startswith('ch_'), \
+                    'invalid charge'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         li = super(Refund, cls)._api_list_all(url, limit=limit,
                                               starting_after=starting_after)
@@ -2529,19 +2627,24 @@ class Source(StripeObject):
             assert type in (
                 'ach_credit_transfer', 'ach_debit', 'alipay', 'bancontact',
                 'bitcoin', 'card', 'eps', 'giropay', 'ideal', 'multibanco',
-                'p24', 'sepa_debit', 'sofort', 'three_d_secure')
-            assert _type(currency) is str and currency
+                'p24', 'sepa_debit', 'sofort', 'three_d_secure'), \
+                'invalid type'
+            assert _type(currency) is str and currency, 'invalid currency'
             if owner is not None:
-                assert _type(owner) is dict
-                assert _type(owner.get('name', '')) is str
-                assert _type(owner.get('email', '')) is str
+                assert _type(owner) is dict, 'invalid owner'
+                assert _type(owner.get('name', '')) is str, \
+                    'invalid owner.name'
+                assert _type(owner.get('email', '')) is str, \
+                    'invalid owner.email'
             if type == 'sepa_debit':
-                assert _type(sepa_debit) is dict
-                assert 'iban' in sepa_debit
-                assert _type(sepa_debit['iban']) is str
-                assert 14 <= len(sepa_debit['iban']) <= 34
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert _type(sepa_debit) is dict, 'invalid sepa_debit'
+                assert 'iban' in sepa_debit, 'invalid sepa_debit'
+                assert _type(sepa_debit['iban']) is str, \
+                    'invalid sepa_debit.iban'
+                assert 14 <= len(sepa_debit['iban']) <= 34, \
+                    'invalid sepa_debit.iban'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -2592,17 +2695,20 @@ class SetupIntent(StripeObject):
 
         try:
             if customer is not None:
-                assert type(customer) is str and customer.startswith('cus_')
+                assert type(customer) is str and customer.startswith('cus_'), \
+                    'invalid customer'
             if usage is None:
                 usage = 'off_session'
-            assert usage in ('off_session', 'on_session')
+            assert usage in ('off_session', 'on_session'), 'invalid usage'
             if payment_method_types is None:
                 payment_method_types = ['card']
-            assert type(payment_method_types) is list
+            assert type(payment_method_types) is list, \
+                'invalid payment_method_types'
             assert all(t in ('card', 'sepa_debit', 'ideal')
-                       for t in payment_method_types)
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                       for t in payment_method_types), \
+                'invalid payment_method_types'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -2623,13 +2729,14 @@ class SetupIntent(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type(id) is str and id.startswith('seti_')
+            assert type(id) is str and id.startswith('seti_'), 'invalid id'
             if client_secret is not None:
-                assert type(client_secret) is str
+                assert type(client_secret) is str, 'invalid client_secret'
             if payment_method_data is not None:
-                assert type(payment_method_data) is dict
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(payment_method_data) is dict, \
+                    'invalid payment_method_data'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
 
@@ -2638,7 +2745,7 @@ class SetupIntent(StripeObject):
 
         if payment_method_data:
             if obj.payment_method is not None:
-                raise UserError(400, 'Bad request')
+                raise UserError(400, 'Bad request: missing payment_method')
 
             pm = PaymentMethod(**payment_method_data)
             obj.payment_method = pm.id
@@ -2672,11 +2779,11 @@ class SetupIntent(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type(id) is str and id.startswith('seti_')
+            assert type(id) is str and id.startswith('seti_'), 'invalid id'
             if client_secret is not None:
-                assert type(client_secret) is str
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(client_secret) is str, 'invalid client_secret'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         obj = cls._api_retrieve(id)
 
@@ -2723,52 +2830,68 @@ class Subscription(StripeObject):
         billing_cycle_anchor = try_convert_to_int(billing_cycle_anchor)
 
         try:
-            assert type(customer) is str and customer.startswith('cus_')
+            assert type(customer) is str and customer.startswith('cus_'), \
+                'invalid customer'
             if trial_end is not None:
                 if trial_end == 'now':
                     trial_end = int(time.time())
-                assert type(trial_end) is int
-                assert trial_end > 1500000000
+                assert type(trial_end) is int, 'invalid trial_end'
+                assert trial_end > 1500000000, 'invalid trial_end'
             if tax_percent is not None:
-                assert default_tax_rates is None
-                assert type(tax_percent) is float
-                assert tax_percent >= 0 and tax_percent <= 100
+                assert default_tax_rates is None, 'invalid default_tax_rates'
+                assert type(tax_percent) is float, 'invalid tax_percent'
+                assert tax_percent >= 0 and tax_percent <= 100, \
+                    'invalid tax_percent'
             if default_tax_rates is not None:
-                assert tax_percent is None
-                assert type(default_tax_rates) is list
+                assert tax_percent is None, 'invalid tax_percent'
+                assert type(default_tax_rates) is list, \
+                    'invalid default_tax_rates'
                 assert all(type(txr) is str and txr.startswith('txr_')
-                           for txr in default_tax_rates)
+                           for txr in default_tax_rates), \
+                    'invalid default_tax_rates'
             if trial_period_days is not None:
-                assert type(trial_period_days) is int
+                assert type(trial_period_days) is int, \
+                    'invalid trial_period_days'
             if backdate_start_date is not None:
-                assert type(backdate_start_date) is int
-                assert backdate_start_date > 1500000000
+                assert type(backdate_start_date) is int, \
+                    'invalid backdate_start_date'
+                assert backdate_start_date > 1500000000, \
+                    'invalid backdate_start_date'
             if billing_cycle_anchor is not None:
-                assert type(billing_cycle_anchor) is int
-                assert billing_cycle_anchor > int(time.time())
+                assert type(billing_cycle_anchor) is int, \
+                    'invalid billing_cycle_anchor'
+                assert billing_cycle_anchor > int(time.time()), \
+                    'invalid billing_cycle_anchor'
             if proration_behavior is not None:
-                assert proration_behavior in ['create_prorations', 'none']
-            assert type(items) is list
+                assert proration_behavior in ['create_prorations', 'none'], \
+                    'invalid proration_behavior'
+            assert type(items) is list, 'invalid items'
             for item in items:
-                assert type(item.get('plan')) is str
+                assert type(item.get('plan')) is str, 'invalid items plan'
                 if item.get('quantity') is not None:
                     item['quantity'] = try_convert_to_int(item['quantity'])
-                    assert type(item['quantity']) is int
-                    assert item['quantity'] > 0
+                    assert type(item['quantity']) is int, \
+                        'invalid items quantity'
+                    assert item['quantity'] > 0, 'invalid items quantity'
                 else:
                     item['quantity'] = 1
                 item['tax_rates'] = item.get('tax_rates')
                 if item['tax_rates'] is not None:
-                    assert type(item['tax_rates']) is list
-                    assert all(type(tr) is str for tr in item['tax_rates'])
+                    assert type(item['tax_rates']) is list, \
+                        'invalid items tax_rates'
+                    assert all(type(tr) is str for tr in item['tax_rates']), \
+                        'invalid items tax_rates'
                 item['metadata'] = item.get('metadata')
                 if item['metadata'] is not None:
-                    assert type(item['metadata']) is dict
-            assert type(enable_incomplete_payments) is bool
+                    assert type(item['metadata']) is dict, \
+                        'invalid items metadata'
+            assert type(enable_incomplete_payments) is bool, \
+                'invalid enable_incomplete_payments'
             assert payment_behavior in ('allow_incomplete',
-                                        'error_if_incomplete')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                                        'error_if_incomplete'), \
+                'invalid payment_behavior'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         if len(items) != 1:
             raise UserError(500, 'Not implemented')
@@ -2923,48 +3046,58 @@ class Subscription(StripeObject):
             if trial_end is not None:
                 if trial_end == 'now':
                     trial_end = int(time.time())
-                assert type(trial_end) is int
-                assert trial_end > 1500000000
+                assert type(trial_end) is int, 'invalid trial_end'
+                assert trial_end > 1500000000, 'invalid trial_end'
             if tax_percent is not None:
-                assert default_tax_rates is None
-                assert type(tax_percent) is float
-                assert tax_percent >= 0 and tax_percent <= 100
+                assert default_tax_rates is None, 'invalid default_tax_rates'
+                assert type(tax_percent) is float, 'invalid tax_percent'
+                assert tax_percent >= 0 and tax_percent <= 100, \
+                    'invalid tax_percent'
             if default_tax_rates is not None:
-                assert tax_percent is None
-                assert type(default_tax_rates) is list
+                assert tax_percent is None, 'invalid tax_percent'
+                assert type(default_tax_rates) is list, \
+                    'invalid default_tax_rates'
                 assert all(type(txr) is str and txr.startswith('txr_')
-                           for txr in default_tax_rates)
+                           for txr in default_tax_rates), \
+                    'invalid default_tax_rates'
             if prorate is not None:
-                assert type(prorate) is bool
+                assert type(prorate) is bool, 'invalid prorate'
             if proration_date is not None:
-                assert type(proration_date) is int
-                assert proration_date > 1500000000
+                assert type(proration_date) is int, 'invalid proration_date'
+                assert proration_date > 1500000000, 'invalid proration_date'
             if cancel_at_period_end is not None:
-                assert type(cancel_at_period_end) is bool
+                assert type(cancel_at_period_end) is bool, \
+                    'invalid cancel_at_period_end'
             if cancel_at is not None:
-                assert type(cancel_at) is int
-                assert cancel_at > 1500000000
+                assert type(cancel_at) is int, 'invalid cancel_at'
+                assert cancel_at > 1500000000, 'invalid cancel_at'
             if items is not None:
-                assert type(items) is list
+                assert type(items) is list, 'invalid items'
                 for item in items:
                     id = item.get('id')
                     if id is not None:
-                        assert type(id) is str and id.startswith('si_')
+                        assert type(id) is str and id.startswith('si_'), \
+                            'invalid items id'
                     if item.get('quantity') is not None:
                         item['quantity'] = try_convert_to_int(item['quantity'])
-                        assert type(item['quantity']) is int
-                        assert item['quantity'] > 0
+                        assert type(item['quantity']) is int, \
+                            'invalid items quantity'
+                        assert item['quantity'] > 0, 'invalid items quantity'
                     else:
                         item['quantity'] = 1
                     item['tax_rates'] = item.get('tax_rates')
                     if item['tax_rates'] is not None:
-                        assert type(item['tax_rates']) is list
-                        assert all(type(tr) is str for tr in item['tax_rates'])
+                        assert type(item['tax_rates']) is list, \
+                            'invalid items tax_rates'
+                        assert all(type(tr) is str
+                                   for tr in item['tax_rates']), \
+                            'invalid items tax_rates'
                     item['metadata'] = item.get('metadata')
                     if item['metadata'] is not None:
-                        assert type(item['metadata']) is dict
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                        assert type(item['metadata']) is dict, \
+                            'invalid items metadata'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         old_plan = self.plan
         if items is not None:
@@ -3061,13 +3194,15 @@ class Subscription(StripeObject):
                       starting_after=None):
         try:
             if customer is not None:
-                assert type(customer) is str and customer.startswith('cus_')
+                assert type(customer) is str and customer.startswith('cus_'), \
+                    'invalid customer'
             if status is not None:
                 assert status in ('all', 'incomplete', 'incomplete_expired',
                                   'trialing', 'active', 'past_due', 'unpaid',
-                                  'canceled')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                                  'canceled'), \
+                    'invalid status'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         li = super(Subscription,
                    cls)._api_list_all(url, limit=limit,
@@ -3095,15 +3230,16 @@ class SubscriptionItem(StripeObject):
         quantity = try_convert_to_int(quantity)
         try:
             if subscription is not None:
-                assert type(subscription) is str
-                assert subscription.startswith('sub_')
-            assert type(plan) is str
-            assert type(quantity) is int and quantity > 0
+                assert type(subscription) is str, 'invalid subscription'
+                assert subscription.startswith('sub_'), 'invalid subscription'
+            assert type(plan) is str, 'invalid plan'
+            assert type(quantity) is int and quantity > 0, 'invalid quantity'
             if tax_rates is not None:
-                assert type(tax_rates) is list
-                assert all(type(tr) is str for tr in tax_rates)
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(tax_rates) is list, 'invalid tax_rates'
+                assert all(type(tr) is str for tr in tax_rates), \
+                    'invalid tax_rates'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         plan = Plan._api_retrieve(plan)  # to return 404 if not existant
         # To return 404 if not existant:
@@ -3190,15 +3326,15 @@ class TaxId(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert _type(customer) is str
-            assert customer.startswith('cus_')
-            assert type in ('eu_vat', 'nz_gst', 'au_abn')
-            assert _type(value) is str and len(value) > 10
+            assert _type(customer) is str, 'invalid customer'
+            assert customer.startswith('cus_'), 'invalid customer'
+            assert type in ('eu_vat', 'nz_gst', 'au_abn'), 'invalid type'
+            assert _type(value) is str and len(value) > 10, 'invalid value'
             if country is None:
                 country = value[0:2]
-            assert _type(country) is str
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert _type(country) is str, 'invalid country'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         Customer._api_retrieve(customer)  # to return 404 if not existant
 
@@ -3235,15 +3371,18 @@ class TaxRate(StripeObject):
         percentage = try_convert_to_float(percentage)
         active = try_convert_to_bool(active)
         try:
-            assert type(display_name) is str and display_name
-            assert type(inclusive) is bool
-            assert type(percentage) is float
-            assert type(active) is bool
-            assert percentage >= 0 and percentage <= 100
-            assert description is None or type(description) is str
-            assert jurisdiction is None or type(jurisdiction) is str
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+            assert type(display_name) is str and display_name, \
+                'invalid display_name'
+            assert type(inclusive) is bool, 'invalid inclusive'
+            assert type(percentage) is float, 'invalid percentage'
+            assert type(active) is bool, 'invalid active'
+            assert percentage >= 0 and percentage <= 100, 'invalid percentage'
+            assert description is None or type(description) is str, \
+                'invalid description'
+            assert jurisdiction is None or type(jurisdiction) is str, \
+                'invalid jurisdiction'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # All exceptions must be raised before this point.
         super().__init__()
@@ -3271,11 +3410,12 @@ class Token(StripeObject):
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
         try:
-            assert type(card) is dict
+            assert type(card) is dict, 'invalid card'
             if customer is not None:
-                assert type(customer) is str and customer.startswith('cus_')
-        except AssertionError:
-            raise UserError(400, 'Bad request')
+                assert type(customer) is str and customer.startswith('cus_'), \
+                    'invalid customer'
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
 
         # If this raises, abort and don't create the token
         card['object'] = 'card'
