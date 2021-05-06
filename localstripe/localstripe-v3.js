@@ -198,7 +198,7 @@ class Element {
   }
 }
 
-Stripe = (apiKey) => {
+function Stripe(apiKey) {
   return {
     elements: () => {
       return {
@@ -418,7 +418,7 @@ Stripe = (apiKey) => {
 
     createPaymentMethod: async () => {},
   };
-};
+}
 
 console.log('localstripe: The Stripe object was just replaced in the page. ' +
             'Stripe elements created from now on will be fake ones, ' +
