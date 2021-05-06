@@ -245,6 +245,118 @@ class StripeObject(object):
         return obj
 
 
+class Account(StripeObject):
+    object = 'account'
+    _id_prefix = 'acct_'
+    _default_account = None
+
+    def __init__(self,
+                 type=None,
+                 country=None,
+                 email=None,
+                 capabilities=None,
+                 business_type=None,
+                 company=None,
+                 individual=None,
+                 metadata=None,
+                 tos_acceptance=None,
+                 business_profile=None,
+                 default_currency=None,
+                 documents=None,
+                 external_accounts=None,
+                 settings=None,
+                 **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        try:
+            assert type in ('custom', 'express', 'standard')
+            assert country is None or _type(country) is str
+            assert email is None or _type(email) is str
+            if type == 'custom':
+                assert capabilities is not None
+            if capabilities is not None:
+                assert _type(capabilities) is dict
+                assert set(capabilities.values()).issubset({
+                    'active', 'inactive', 'pending'})
+            assert business_type is None or \
+                business_type in ('individual', 'company', 'non_profit',
+                                  'government_entity')
+            assert company is None or _type(company) is dict, 'invalid company'
+            assert individual is None or _type(individual) is dict
+            assert metadata is None or _type(metadata) is dict
+            assert tos_acceptance is None or _type(tos_acceptance) is dict
+            assert business_profile is None or \
+                _type(business_profile) is dict
+            assert default_currency is None or \
+                _type(default_currency) is str
+            assert documents is None or _type(documents) is dict
+            if external_accounts is not None:
+                assert _type(external_accounts) is list
+                assert all(_type(v) is dict
+                           for v in external_accounts.values())
+            assert settings is None or _type(settings) is dict
+        except AssertionError as e:
+            raise UserError(400, 'Bad request') from e
+
+        # All exceptions must be raised before this point.
+        super().__init__()
+
+        self.type = type
+        self.country = country or 'US'
+        self.email = email
+        self.capabilities = capabilities or {}
+        self.business_type = business_type
+        self.company = company or {}
+        self.individual = individual or {}
+        self.metadata = metadata or {}
+        self.tos_acceptance = tos_acceptance or {}
+        self.business_profile = business_profile or {}
+        self.default_currency = default_currency or 'usd'
+        self.documents = documents or {}
+        self.external_accounts = List(
+            '/v1/accounts/' + self.id + '/external_accounts')
+        self.external_accounts._list = external_accounts or []
+        self.settings = settings or {}
+        self.details_submitted = False
+        self.payouts_enabled = False
+        self.charges_enabled = False
+
+    @classmethod
+    def _api_create(cls, external_account=None, **data):
+        external_accounts = None
+        if external_account is not None:
+            external_accounts = [external_account]
+
+        return super()._api_create(external_accounts=external_accounts, **data)
+
+    @classmethod
+    def _api_update(cls, id, external_account=None, **data):
+        obj = cls._api_retrieve(id)
+        if external_account is not None:
+            if obj.external_accounts is None:
+                obj.external_accounts = [external_account]
+            else:
+                obj.external_accounts.append(external_account)
+
+        obj._update(**data)
+        return obj
+
+    @classmethod
+    def _api_list_all(cls, url, created=None, ending_before=None, **kwargs):
+        return super()._api_list_all(url, **kwargs)
+
+    @classmethod
+    def _api_default(cls, **kwargs):
+        if cls._default_account is None:
+            cls._default_account = Account(type='standard')
+
+        return cls._default_account
+
+
+extra_apis.append(('GET', '/v1/account', Account._api_default))
+
+
 class Balance(object):
     object = 'balance'
 
