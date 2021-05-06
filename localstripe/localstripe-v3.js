@@ -18,7 +18,22 @@
 // First, get the domain from which this script is pulled:
 const LOCALSTRIPE_SOURCE = (function () {
   const scripts = document.getElementsByTagName('script');
-  const src = scripts[scripts.length - 1].src;
+  var src;
+
+  for (var i = 0; i < scripts.length; i++) {
+    src = scripts[i].src;
+    if (!src) {
+      continue;
+    }
+
+    var m = src.match(/((?:https?:)\/\/[^\/]*)\/js\.stripe\.com\/v3/);
+    if (m) {
+      return m[1];
+    }
+  }
+
+  // fallback on last script tag
+  src = scripts[scripts.length - 1].src;
   return src.match(/https?:\/\/[^\/]*/)[0];
 })();
 
