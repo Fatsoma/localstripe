@@ -200,7 +200,10 @@ async def save_store_middleware(request, handler):
             store.dump_to_disk()
 
 
+norm_path_middleware = web.normalize_path_middleware(append_slash=False,
+                                                     remove_slash=True)
 app = web.Application(middlewares=[error_middleware, auth_middleware,
+                                   norm_path_middleware,
                                    save_store_middleware])
 app.on_response_prepare.append(add_cors_headers)
 
