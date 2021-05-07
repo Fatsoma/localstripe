@@ -214,6 +214,12 @@ class Element {
                                        field === 'postal_code' ? 5 :
                                        field === 'cvc' ? 3 : 2);
       this._inputs[field].oninput = changed;
+      this._inputs[field].onblur = () => {
+        (this.listeners['blur'] || []).forEach(handler => handler());
+      };
+      this._inputs[field].onfocus = () => {
+        (this.listeners['focus'] || []).forEach(handler => handler());
+      }
       this._domChildren.push(this._inputs[field]);
     });
 
