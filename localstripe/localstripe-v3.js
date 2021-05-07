@@ -417,6 +417,32 @@ function Stripe(apiKey) {
     },
 
     createPaymentMethod: async () => {},
+
+    paymentRequest: function() {
+      return {
+        listeners: [],
+        abort: () => {},
+        canMakePayment: () => {
+          return new Promise(resolve => {
+            resolve(null);
+          });
+        },
+        show: () => {},
+        update: () => {},
+        on: (event, handler) => {
+          this.listeners[event] = this.listeners[event] || [];
+          this.listeners[event].push(handler);
+        },
+        off: (event, handler) => {
+          if (handler) {
+            var i = this.listeners[event].indexOf(handler);
+            this.listeners[event].splice(i, 1);
+          } else {
+            delete this.listeners[event];
+          }
+        }
+      };
+    },
   };
 }
 
