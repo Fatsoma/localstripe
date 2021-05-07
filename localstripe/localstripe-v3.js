@@ -197,6 +197,7 @@ class Element {
     });
 
     this._domChildren.forEach((child) => domElement.appendChild(child));
+    (this.listeners['ready'] || []).forEach(handler => handler());
   }
 
   unmount() {
@@ -210,6 +211,34 @@ class Element {
     this.unmount();
     if (this._stripeElements._elements[this._type] === this) {
       this._stripeElements._elements[this._type] = null;
+    }
+  }
+
+  blur() {
+    Object.keys(this._inputs).forEach(field => {
+      this._inputs[field].blur();
+    });
+    (this.listeners['blur'] || []).forEach(handler => handler());
+  }
+
+  focus() {
+    var field = Object.keys(this._inputs)[0];
+    this._inputs[field].focus();
+    (this.listeners['focus'] || []).forEach(handler => handler());
+  }
+
+  clear() {
+    Object.keys(this._inputs).forEach(field => {
+      this._inputs[field].value = '';
+    });
+  }
+
+  update(options) {
+    if (!options) {
+      return;
+    }
+    if (options.value && options.value.postalCode && this._inputs.postal_code) {
+      this._inputs.postal_code.value = options.value.postalCode;
     }
   }
 
