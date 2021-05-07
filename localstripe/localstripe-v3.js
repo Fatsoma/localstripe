@@ -166,23 +166,44 @@ class Element {
           cvc: this._inputs.cvc && this._inputs.cvc.value,
         },
         postal_code: this._inputs.postal_code && this._inputs.postal_code.value,
+      };
+      var evt = {
+        elementType: this._type,
+        empty: event.target.value.length == 0,
+        complete: false,
+        error: null,
+        brand: this._cardBrand(),
+      };
+
+      switch (event.target) {
+        case this._inputs.number:
+          var numberLen = evt.brand == 'amex' ? 15 : 16;
+          if (this.value.card.number.length >= numberLen) {
+            evt.complete = true;
+            this._inputs.exp_month && this._inputs.exp_month.focus();
+          }
+          break;
+        case this._inputs.exp_month:
+          if (parseInt(this.value.card.exp_month) > 1) {
+            evt.complete = true;
+            this._inputs.exp_year && this._inputs.exp_year.focus();
+          }
+          break;
+        case this._inputs.exp_year:
+          if (this.value.card.exp_year.length >= 4) {
+            evt.complete = true;
+            this._inputs.cvc && this._inputs.cvc.focus();
+          }
+          break;
+        case this._inputs.cvc:
+          if (this.value.card.cvc.length >= 3) {
+            evt.complete = true;
+            this._inputs.postal_code && this._inputs.postal_code.focus();
+          }
+          break;
       }
 
-      if (event.target === this._inputs.number &&
-          this.value.card.number.length >= 16) {
-        this._inputs.exp_month && this._inputs.exp_month.focus();
-      } else if (event.target === this._inputs.exp_month &&
-                 parseInt(this.value.card.exp_month) > 1) {
-        this._inputs.exp_year && this._inputs.exp_year.focus();
-      } else if (event.target === this._inputs.exp_year &&
-                 this.value.card.exp_year.length >= 4) {
-        this._inputs.cvc && this._inputs.cvc.focus();
-      } else if (event.target === this._inputs.cvc &&
-                 this.value.card.cvc.length >= 3) {
-        this._inputs.postal_code && this._inputs.postal_code.focus();
-      }
-
-      (this.listeners['change'] || []).forEach(handler => handler());
+      (this.listeners['change'] || []).forEach(handler => handler(evt));
     };
 
     Object.keys(this._inputs).forEach(field => {
@@ -198,6 +219,28 @@ class Element {
 
     this._domChildren.forEach((child) => domElement.appendChild(child));
     (this.listeners['ready'] || []).forEach(handler => handler());
+  }
+
+  _cardBrand() {
+    if (!this._inputs.number) {
+      return 'unknown';
+    }
+
+    const brands = {
+      'visa': '^4',
+      'mastercard': '^(?:2(?:22[1-9]|2[3-9]|[3-6]|7[01]|720)|5[1-5])',
+      'amex': '^3[47]',
+      'discover': '^6(?:011|22|4[4-9]|5)',
+      'diners': '^36',
+      'jcb': '^35(?:2[89]|[3-8])',
+      'unionpay': '^62',
+    }
+    Object.keys(brands).forEach(brand => {
+      if (this._inputs.number.value.match(brands[brand])) {
+        return brand;
+      }
+    });
+    return 'unknown';
   }
 
   unmount() {
