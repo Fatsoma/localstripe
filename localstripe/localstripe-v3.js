@@ -95,10 +95,11 @@ function openModal(text, confirmText, cancelText) {
 }
 
 class Element {
-  constructor(stripeElements) {
+  constructor(stripeElements, type) {
     // Element needs a reference to the object that created it, in order to
     // thoroughly destroy() itself.
     this._stripeElements = stripeElements;
+    this._type = type;
     this.listeners = {};
     this._domChildren = [];
   }
@@ -111,7 +112,7 @@ class Element {
                       'a valid DOM element or selector.');
     }
 
-    if (this._stripeElements._cardElement !== this) {
+    if (this._stripeElements._elements[this._type] !== this) {
       throw new Error('This Element has already been destroyed. Please ' +
                       'create a new one.');
     }
@@ -128,37 +129,57 @@ class Element {
     labelSpan.textContent = 'localstripe: ';
     this._domChildren.push(labelSpan);
 
-    this._inputs = {
-      number: null,
-      exp_month: null,
-      exp_year: null,
-      cvc: null,
-      postal_code: null,
-    };
+    switch (this._type) {
+      case 'cardNumber':
+        this._inputs = {
+          number: null,
+        };
+        break;
+      case 'cardExpiry':
+        this._inputs = {
+          exp_month: null,
+          exp_year: null,
+        };
+        break;
+      case 'cardCvc':
+        this._inputs = {
+          cvc: null,
+        };
+        break;
+      default:
+        this._inputs = {
+          number: null,
+          exp_month: null,
+          exp_year: null,
+          cvc: null,
+          postal_code: null,
+        };
+        break;
+    }
 
     const changed = event => {
       this.value = {
         card: {
-          number: this._inputs.number.value,
-          exp_month: this._inputs.exp_month.value,
-          exp_year: '20' + this._inputs.exp_year.value,
-          cvc: this._inputs.cvc.value,
+          number: this._inputs.number && this._inputs.number.value,
+          exp_month: this._inputs.exp_month && this._inputs.exp_month.value,
+          exp_year: this._inputs.exp_year && '20' + this._inputs.exp_year.value,
+          cvc: this._inputs.cvc && this._inputs.cvc.value,
         },
-        postal_code: this._inputs.postal_code.value,
+        postal_code: this._inputs.postal_code && this._inputs.postal_code.value,
       }
 
       if (event.target === this._inputs.number &&
           this.value.card.number.length >= 16) {
-        this._inputs.exp_month.focus();
+        this._inputs.exp_month && this._inputs.exp_month.focus();
       } else if (event.target === this._inputs.exp_month &&
                  parseInt(this.value.card.exp_month) > 1) {
-        this._inputs.exp_year.focus();
+        this._inputs.exp_year && this._inputs.exp_year.focus();
       } else if (event.target === this._inputs.exp_year &&
                  this.value.card.exp_year.length >= 4) {
-        this._inputs.cvc.focus();
+        this._inputs.cvc && this._inputs.cvc.focus();
       } else if (event.target === this._inputs.cvc &&
                  this.value.card.cvc.length >= 3) {
-        this._inputs.postal_code.focus();
+        this._inputs.postal_code && this._inputs.postal_code.focus();
       }
 
       (this.listeners['change'] || []).forEach(handler => handler());
@@ -187,8 +208,8 @@ class Element {
 
   destroy() {
     this.unmount();
-    if (this._stripeElements._cardElement === this) {
-      this._stripeElements._cardElement = null;
+    if (this._stripeElements._elements[this._type] === this) {
+      this._stripeElements._elements[this._type] = null;
     }
   }
 
@@ -202,16 +223,19 @@ function Stripe(apiKey) {
   return {
     elements: () => {
       return {
-        _cardElement: null,
+        _elements: {},
         create: function(type, options) {
-          if (this._cardElement) {
-            throw new Error("Can only create one Element of type card");
+          if (this._elements[type]) {
+            throw new Error('Can only create one Element of type ' + type);
           }
-          this._cardElement = new Element(this);
-          return this._cardElement;
+          if (!['card', 'cardNumber', 'cardExpiry', 'cardCvc'].includes(type)) {
+            throw new Error('Element type not supported: ' + type);
+          }
+          this._elements[type] = new Element(this, type);
+          return this._elements[type];
         },
         getElement: function(type) {
-          return this._cardElement;
+          return this._elements[type];
         }
       };
     },
