@@ -307,10 +307,11 @@ class Element {
 }
 
 function Stripe(apiKey) {
-  return {
+  var _elements = {};
+  return window.stripe = {
     elements: () => {
       return {
-        _elements: {},
+        _elements: _elements,
         create: function(type, options) {
           if (this._elements[type]) {
             throw new Error('Can only create one Element of type ' + type);
@@ -527,7 +528,63 @@ function Stripe(apiKey) {
       }
     },
 
-    createPaymentMethod: async () => {},
+    createPaymentMethod: async (dataOrType, dataOrElement, legacyData) => {
+      console.log('localstripe: Stripe().createPaymentMethod()');
+      try {
+        let data, element;
+        let card = {};
+        if (typeof dataOrType === 'string') {
+          if (dataOrElement && dataOrElement.constructor && dataOrElement.constructor.name === 'Element') {
+            data = legacyData;
+            element = dataOrElement;
+          } else {
+            data = dataOrElement;
+          }
+          if (data.type && data.type !== dataOrType) {
+            return {error: 'The type supplied in payment_method_data is not consistent.'};
+          }
+          data.type = dataOrType;
+        } else {
+          data = dataOrType;
+          element = data.card;
+        }
+
+        if (element) {
+          let types = ['card', 'cardNumber', 'cardExpiry', 'cardCvc'];
+          types.forEach(type => {
+            let elem = element._stripeElements.getElement(type);
+            if (elem) {
+              Object.keys(elem._inputs).forEach(field => {
+                card[field] = elem._inputs[field].value;
+              });
+            }
+          });
+        }
+
+        const url = `${LOCALSTRIPE_SOURCE}/v1/payment_methods`;
+        let response = await fetch(url, {
+          method: 'POST',
+          body: JSON.stringify({
+            key: apiKey,
+            type: data.type,
+            card: card,
+            billing_details: data.billing_details,
+          }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (response.status !== 200 || body.error) {
+          return {error: body.error};
+        } else {
+          return {paymentMethod: body};
+        }
+      } catch (err) {
+        if (typeof err === 'object' && err.error) {
+          return err;
+        } else {
+          return {error: err};
+        }
+      }
+    },
 
     paymentRequest: function() {
       return {
