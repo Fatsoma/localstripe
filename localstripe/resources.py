@@ -977,6 +977,18 @@ class Customer(StripeObject):
         return super()._api_delete(id)
 
     @classmethod
+    def _api_list_all(cls, url, email=None, created=None, ending_before=None,
+                      limit=None, starting_after=None, **kwargs):
+        if kwargs:
+            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
+
+        li = super()._api_list_all(url, limit, starting_after, **kwargs)
+
+        if email is not None:
+            li._list = [c for c in li._list if c.email == email]
+        return li
+
+    @classmethod
     def _api_retrieve_source(cls, id, source_id, **kwargs):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
