@@ -1971,16 +1971,19 @@ class PaymentIntent(StripeObject):
                 400, 'Bad request: status must be requires_confirmation')
 
         def on_success():
+            schedule_webhook(Event('payment_intent.succeeded', self))
             if self.invoice:
                 invoice = Invoice._api_retrieve(self.invoice)
                 invoice._on_payment_success()
 
         def on_failure_now():
+            schedule_webhook(Event('payment_intent.payment_failed', self))
             if self.invoice:
                 invoice = Invoice._api_retrieve(self.invoice)
                 invoice._on_payment_failure_now()
 
         def on_failure_later():
+            schedule_webhook(Event('payment_intent.payment_failed', self))
             if self.invoice:
                 invoice = Invoice._api_retrieve(self.invoice)
                 invoice._on_payment_failure_later()
@@ -2041,6 +2044,7 @@ class PaymentIntent(StripeObject):
             raise UserError(400, 'Bad request') from e
 
         obj = super()._api_create(**data)
+        schedule_webhook(Event('payment_intent.created', obj))
 
         if confirm:
             cls._api_confirm(obj.id)
@@ -2096,6 +2100,7 @@ class PaymentIntent(StripeObject):
 
         obj._canceled = True
         obj.next_action = None
+        schedule_webhook(Event('payment_intent.canceled', obj))
         return obj
 
     @classmethod

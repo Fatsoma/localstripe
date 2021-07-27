@@ -215,6 +215,7 @@ Only those events types are currently supported:
   ``customer.subscription.deleted``
 - Invoice: ``invoice.created``, ``invoice.payment_succeeded`` and
   ``invoice.payment_failed``
+- PaymentIntent: ``payment_intent.created``, ``payment_intent.succeeded``, ``payment_intent.payment_failed`` and ``payment_intent.canceled``
 
 Flush stored data
 -----------------
