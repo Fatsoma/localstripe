@@ -306,12 +306,15 @@ async def config_webhook(request):
     url = data.get('url', None)
     secret = data.get('secret', None)
     events = data.get('events', None)
+    expand = data.pop('expand', None)
     if not url or not secret or not url.startswith('http'):
         raise UserError(400, 'Bad request')
     if events is not None and type(events) is not list:
         raise UserError(400, 'Bad request')
     register_webhook(id, url, secret, events)
-    return web.Response()
+    wh = WebhookEndpoint(id=id, url=url, enabled_events=events)
+    wh.secret = secret
+    return json_response(wh._export(expand=expand))
 
 
 async def flush_store(request):
