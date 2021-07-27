@@ -216,6 +216,7 @@ Only those events types are currently supported:
 - Invoice: ``invoice.created``, ``invoice.payment_succeeded`` and
   ``invoice.payment_failed``
 - PaymentIntent: ``payment_intent.created``, ``payment_intent.succeeded``, ``payment_intent.payment_failed`` and ``payment_intent.canceled``
+- PaymentMethod: ``payment_method.attached``, ``payment_method.detached``
 
 Flush stored data
 -----------------

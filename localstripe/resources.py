@@ -2272,6 +2272,7 @@ class PaymentMethod(StripeObject):
                             {'code': 'card_declined'})
 
         obj.customer = customer
+        schedule_webhook(Event('payment_method.attached', obj))
         return obj
 
     @classmethod
@@ -2286,6 +2287,7 @@ class PaymentMethod(StripeObject):
 
         obj = cls._api_retrieve(id)
         obj.customer = None
+        schedule_webhook(Event('payment_method.detached', obj))
         return obj
 
     @classmethod
