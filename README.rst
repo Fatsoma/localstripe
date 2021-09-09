@@ -61,11 +61,7 @@ Docker image can be rebuilt using:
 
 .. code::
 
- docker build --no-cache -t adrienverge/localstripe -<<EOF
- FROM python:3
- RUN pip install localstripe
- CMD ["localstripe"]
- EOF
+ docker build --no-cache -t adrienverge/localstripe .
 
 Examples
 --------
