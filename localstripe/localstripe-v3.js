@@ -461,7 +461,7 @@ function Stripe(apiKey) {
             ...data.payment_method_data,
           }});
       },
-    confirmCardPayment: async (clientSecret, data) => {
+    confirmCardPayment: async (clientSecret, data, options) => {
       console.log('localstripe: Stripe().confirmCardPayment()');
       try {
         const success = await openModal(
@@ -585,6 +585,13 @@ function Stripe(apiKey) {
         }
       }
     },
+
+    confirmPaymentIntent: // deprecated
+      async function(clientSecret, data) {
+        return this.confirmCardPayment(clientSecret, data, {
+          handleActions: false,
+        });
+      },
 
     paymentRequest: function() {
       return {
