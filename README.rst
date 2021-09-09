@@ -51,17 +51,17 @@ Then simply run the command ``localstripe``. The fake Stripe server is now
 listening on port 8420.
 
 Or launch a container using `the Docker image
-<https://hub.docker.com/r/adrienverge/localstripe/>`_:
+<https://hub.docker.com/r/fatsoma/localstripe/>`_:
 
 .. code:: shell
 
- docker run -p 8420:8420 adrienverge/localstripe:latest
+ docker run -p 8420:8420 fatsoma/localstripe:latest
 
 Docker image can be rebuilt using:
 
 .. code::
 
- docker build --no-cache -t adrienverge/localstripe .
+ docker build --no-cache -t fatsoma/localstripe .
 
 Examples
 --------
