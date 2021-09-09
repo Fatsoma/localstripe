@@ -53,6 +53,7 @@ async def _send_webhook(event):
     await asyncio.sleep(1)
 
     logger = logging.getLogger('aiohttp.access')
+    logger.debug('sending webhook %s if registered' % event.type)
 
     for webhook in _webhooks.values():
         if webhook.events is not None and event.type not in webhook.events:
