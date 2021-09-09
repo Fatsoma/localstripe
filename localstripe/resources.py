@@ -2121,8 +2121,10 @@ class PaymentIntent(StripeObject):
 
         if client_secret != obj.client_secret:
             raise UserError(401, 'Unauthorized')
-        if obj.status != 'requires_action':
-            raise UserError(400, 'Bad request: status must be requires_action')
+        if obj.status not in ('requires_action', 'requires_confirmation'):
+            raise UserError(400, 'Bad request: status must be ' +
+                            'requires_action or requires_confirmation',
+                            {'status': obj.status})
 
         obj.next_action = None
         if success:
