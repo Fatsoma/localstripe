@@ -55,18 +55,7 @@ Or launch a container using `the Docker image
 
 .. code:: shell
 
- docker run --rm -p 8420:8420 \
-   -e ENV=preview \
-   -e VAULT_ADDR \
-   fatsoma/localstripe:latest
-
- docker run --rm -p 8420:8420 \
-   --add-host host.docker.internal:$(docker network inspect bridge -f "{{json (index .IPAM.Config 0).Gateway}}" | tr -d \") \
-   -e WEBHOOK_URL=http://host.docker.internal:8082/stripe/webhook \
-   -e WEBHOOK_SIGNING_SECRET \
-   -e CONNECT_WEBHOOK_URL=http://host.docker.internal:8082/stripe/connect-webhook \
-   -e CONNECT_WEBHOOK_SIGNING_SECRET \
-   fatsoma/localstripe:latest
+ make docker-run ENV=development
 
 Docker image can be rebuilt using:
 
