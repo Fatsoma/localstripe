@@ -23,6 +23,7 @@ import re
 import socket
 
 from aiohttp import web
+from aiohttp.abc import AbstractAccessLogger
 
 from .resources import Account, BalanceTransaction, Charge, Coupon, Customer, \
     Event, Invoice, InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, \
@@ -335,6 +336,16 @@ app.router.add_delete('/_config/data', flush_store)
 app.router.add_get('/_status', get_status)
 
 
+class AccessLogger(AbstractAccessLogger):
+    def log(self, request, response, time):
+        if request.path.startswith('/_status'):
+            return
+
+        self.logger.info(f'{request.remote} '
+                         f'"{request.method} {request.path} '
+                         f'done in {time}s: {response.status}')
+
+
 def start():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8420)
@@ -353,7 +364,10 @@ def start():
     logger.setLevel(logging.DEBUG)
     logger.addHandler(logging.StreamHandler())
 
-    web.run_app(app, sock=sock, access_log=logger)
+    web.run_app(app,
+                sock=sock,
+                access_log=logger,
+                access_log_class=AccessLogger)
 
 
 if __name__ == '__main__':
