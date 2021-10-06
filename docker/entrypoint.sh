@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 get_data() {
   python -c "import json; import sys; print(json.load(sys.stdin)['data']['$1'])"
 }
