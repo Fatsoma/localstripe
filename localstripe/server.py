@@ -316,8 +316,7 @@ async def config_webhook(request):
     if events is not None and type(events) is not list:
         raise UserError(400, 'Bad request')
     register_webhook(id, url, secret, events)
-    wh = WebhookEndpoint(id=id, url=url, enabled_events=events)
-    wh.secret = secret
+    wh = WebhookEndpoint(id=id, url=url, enabled_events=events, _secret=secret)
     return json_response(wh._export(expand=expand))
 
 

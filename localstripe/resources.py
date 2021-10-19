@@ -45,12 +45,19 @@ class Store(dict):
                 old = pickle.load(f)
                 self.clear()
                 self.update(old)
+                self._restore_webhooks()
         except FileNotFoundError:
             pass
 
     def dump_to_disk(self):
         with open('/tmp/localstripe.pickle', 'wb') as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def _restore_webhooks(self):
+        for key, obj in self.items():
+            if not key.startswith('webhook_endpoint:'):
+                continue
+            register_webhook(obj.id, obj.url, obj._secret, obj.enabled_events)
 
     def __setitem__(self, *args, **kwargs):
         super().__setitem__(*args, **kwargs)
@@ -3458,7 +3465,7 @@ class WebhookEndpoint(StripeObject):
 
     def __init__(self, id=None, url=None, enabled_events=None,
                  api_version=None, description=None, application=None,
-                 status=None, **kwargs):
+                 status=None, _secret=None, **kwargs):
         if kwargs:
             raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
 
@@ -3471,17 +3478,22 @@ class WebhookEndpoint(StripeObject):
         self.description = description or ''
         self.application = application
         self.status = status or 'enabled'
+        self._secret = _secret or \
+            getattr(self, '_secret_prefix') + random_id(14)
 
     @classmethod
     def _api_create(cls, **data):
+        if '_secret' in data:
+            raise UserError(400, 'Unexpected _secret')
         obj = super()._api_create(**data)
 
-        obj.secret = getattr(obj, '_secret_prefix') + random_id(14)
-        register_webhook(obj.id, obj.url, obj.secret, obj.enabled_events)
+        register_webhook(obj.id, obj.url, obj._secret, obj.enabled_events)
         return obj
 
     @classmethod
     def _api_update(cls, **data):
+        if '_secret' in data:
+            raise UserError(400, 'Unexpected _secret')
         obj = super()._api_update(**data)
 
         register_webhook(obj.id, obj.url, obj.secret, obj.enabled_events)
@@ -3501,16 +3513,3 @@ class WebhookEndpoint(StripeObject):
         if id not in list_webhooks().keys():
             raise UserError(404, 'Not Found')
         unregister_webhook(id)
-
-    @classmethod
-    def _api_list_all(cls, url, limit=None, starting_after=None, **kwargs):
-        if kwargs:
-            raise UserError(400, 'Unexpected ' + ', '.join(kwargs.keys()))
-
-        webhooks = list_webhooks()
-
-        li = List(url, limit=limit, starting_after=starting_after)
-        li._list = [WebhookEndpoint(id=id, url=w.url,
-                                    enabled_events=w.events)
-                    for id, w in webhooks.items()]
-        return li
