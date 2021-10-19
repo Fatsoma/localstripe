@@ -341,7 +341,7 @@ class AccessLogger(AbstractAccessLogger):
             return
 
         self.logger.info(f'{request.remote} '
-                         f'"{request.method} {request.path} '
+                         f'"{request.method} {request.path}" '
                          f'done in {time}s: {response.status}')
 
 
