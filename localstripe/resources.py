@@ -1982,6 +1982,7 @@ class PaymentIntent(StripeObject):
             if self.invoice:
                 invoice = Invoice._api_retrieve(self.invoice)
                 invoice._on_payment_success()
+            self._api_delete(self.id)
 
         def on_failure_now():
             schedule_webhook(Event('payment_intent.payment_failed', self))
