@@ -44,31 +44,29 @@ then
   fi
 fi
 
-echo "Starting localstripe for setting webhooks"
-localstripe --from-scratch --port "$PORT" &
-
-echo "Setting webhook $WEBHOOK_URL"
-# shellcheck disable=SC2034
-for i in {1..100} ; do
-  sleep 0.2
-  ! curl -s -o/dev/null "localhost:${PORT}/_config/webhooks/webhook" \
-    -d "url=$WEBHOOK_URL" \
-    -d "secret=$WEBHOOK_SIGNING_SECRET" \
-    -d 'events[]=payment_intent.succeeded' \
-    -d 'events[]=payment_intent.payment_failed' \
-    -d 'events[]=payment_method.updated' \
-    -d 'events[]=payment_method.card_automatically_updated' \
-    -d 'events[]=payment_method.detached' \
-    || break
-done
-
-echo "Setting connect webhook $CONNECT_WEBHOOK_URL"
-curl -s -o/dev/null "localhost:${PORT}/_config/webhooks/connect-webhook" \
-  -d "url=$CONNECT_WEBHOOK_URL" \
-  -d "secret=$CONNECT_WEBHOOK_SIGNING_SECRET" \
-  -d 'events[]=payment_intent.succeeded' \
-  -d 'events[]=payment_intent.payment_failed'
-
-echo "Restarting localstripe"
-pgrep localstripe | xargs kill
-exec localstripe --port "$PORT"
+echo "Starting localstripe"
+exec localstripe --port "$PORT" --config <<JSON
+{
+  "WebhookEndpoints": {
+    "webhook": {
+      "url": "$WEBHOOK_URL",
+      "secret": "$WEBHOOK_SIGNING_SECRET",
+      "events": [
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed",
+        "payment_method.updated",
+        "payment_method.card_automatically_updated",
+        "payment_method.detached"
+      ]
+    },
+    "connect-webhook": {
+      "url": "$CONNECT_WEBHOOK_URL",
+      "secret": "$CONNECT_WEBHOOK_SIGNING_SECRET",
+      "events": [
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed"
+      ]
+    }
+  }
+}
+JSON

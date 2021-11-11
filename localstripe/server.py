@@ -21,6 +21,7 @@ import logging
 import os.path
 import re
 import socket
+import sys
 
 from aiohttp import web
 from aiohttp.abc import AbstractAccessLogger
@@ -349,8 +350,11 @@ def start():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8420)
     parser.add_argument('--from-scratch', action='store_true')
+    parser.add_argument('--config', action='store_true')
     args = parser.parse_args()
 
+    if args.config:
+        store.load_from_config(sys.stdin)
     if not args.from_scratch:
         store.try_load_from_disk()
 

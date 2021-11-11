@@ -17,6 +17,7 @@
 import asyncio
 from datetime import datetime, timedelta
 import hashlib
+import json
 import pickle
 import random
 import re
@@ -52,6 +53,19 @@ class Store(dict):
     def dump_to_disk(self):
         with open('/tmp/localstripe.pickle', 'wb') as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_from_config(self, fp):
+        conf = json.load(fp)
+        if conf['WebhookEndpoints']:
+            self.load_config_webhooks(conf['WebhookEndpoints'])
+        self._restore_webhooks()
+
+    def load_config_webhooks(self, config):
+        for name in config:
+            obj = config[name]
+            WebhookEndpoint(url=obj['url'],
+                            _secret=obj['secret'],
+                            enabled_events=obj['events'])
 
     def _restore_webhooks(self):
         for key, obj in self.items():
