@@ -45,7 +45,7 @@ then
 fi
 
 echo "Starting localstripe"
-exec localstripe --port "$PORT" --config <<JSON
+exec localstripe --port "$PORT" --from-scratch --no-save --config <<JSON
 {
   "WebhookEndpoints": {
     "webhook": {
