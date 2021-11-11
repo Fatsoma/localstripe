@@ -351,8 +351,10 @@ def start():
     parser.add_argument('--port', type=int, default=8420)
     parser.add_argument('--from-scratch', action='store_true')
     parser.add_argument('--config', action='store_true')
+    parser.add_argument('--no-save', default=False, action='store_true')
     args = parser.parse_args()
 
+    store.save_to_disk = not args.no_save
     if args.config:
         store.load_from_config(sys.stdin)
     if not args.from_scratch:

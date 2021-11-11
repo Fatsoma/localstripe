@@ -39,6 +39,7 @@ _type = type
 class Store(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.save_to_disk = True
 
     def try_load_from_disk(self):
         try:
@@ -51,6 +52,8 @@ class Store(dict):
             pass
 
     def dump_to_disk(self):
+        if not self.save_to_disk:
+            return
         with open('/tmp/localstripe.pickle', 'wb') as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
