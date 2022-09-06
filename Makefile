@@ -9,7 +9,8 @@ else
 REGION = us-west-1
 endif
 LOCAL_TAG = $(ENV)-$(REGION)-localstripe:latest
-ECR_TAG = 819738237059.dkr.ecr.$(REGION).amazonaws.com/$(ENV)-$(REGION)-localstripe:latest
+ECR_URL = 819738237059.dkr.ecr.$(REGION).amazonaws.com
+ECR_TAG = $(ECR_URL)/$(ENV)-$(REGION)-localstripe:latest
 
 SYSTEM = $(shell uname -s)
 HOST_POST ?= 8420
@@ -20,7 +21,7 @@ RUN_ENV ?= development
 .PHONY: docker-login
 docker-login:
 	@echo "  > Logging in to ECR repository for environment $(ENV)"
-	@$(shell aws ecr get-login --region $(REGION) --no-include-email)
+	@aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $(ECR_URL)
 
 ## docker-build: Build docker image ENV=preview (default)
 .PHONY: docker-build
