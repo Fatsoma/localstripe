@@ -13,7 +13,7 @@ ECR_URL = 819738237059.dkr.ecr.$(REGION).amazonaws.com
 ECR_TAG = $(ECR_URL)/$(ENV)-$(REGION)-localstripe:latest
 
 SYSTEM = $(shell uname -s)
-HOST_POST ?= 8420
+HOST_PORT ?= 8420
 HOST_NAME=host.docker.internal
 RUN_ENV ?= development
 
@@ -49,7 +49,7 @@ else
 HOST_IP ?= $(shell docker network inspect bridge -f "{{json (index .IPAM.Config 0).Gateway}}")
 docker-run:
 	@echo "  > Running docker image: $(LOCAL_TAG) with host $(HOST_NAME):$(HOST_IP)"
-	@docker run --rm -p $(HOST_PORT):80 --add-host "$(HOST_NAME):$(HOST_IP)" --env-file .env.$(RUN_ENV) $(LOCAL_TAG)
+	@docker run --rm -p $(HOST_PORT):8420 --add-host "$(HOST_NAME):$(HOST_IP)" --env-file .env.$(RUN_ENV) $(LOCAL_TAG)
 endif
 
 ## docker-image: Combine docker build and push
