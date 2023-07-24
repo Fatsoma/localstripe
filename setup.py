@@ -23,7 +23,7 @@ setup(
     name='localstripe',
     version=__version__,
     author=__author__,
-    url='https://github.com/adrienverge/localstripe',
+    url='https://github.com/Fatsoma/localstripe',
     description=('A fake but stateful Stripe server that you can run locally, '
                  'for testing purposes.'),
 

@@ -36,4 +36,7 @@ class UserError(Exception):
             self.body['error']['message'] = message
 
     def to_response(self):
+        if self.__cause__ is not None:
+            self.body['error']['message'] += ': ' + repr(self.__cause__)
+
         return json_response(self.body, status=self.code)

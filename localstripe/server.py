@@ -21,13 +21,15 @@ import logging
 import os.path
 import re
 import socket
+import sys
 
 from aiohttp import web
+from aiohttp.abc import AbstractAccessLogger
 
-from .resources import BalanceTransaction, Charge, Coupon, Customer, Event, \
-    Invoice, InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, \
+from .resources import Account, BalanceTransaction, Charge, Coupon, Customer, \
+    Event, Invoice, InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, \
     Product, Refund, SetupIntent, Source, Subscription, SubscriptionItem, \
-    TaxRate, Token, extra_apis, store
+    TaxRate, Token, WebhookEndpoint, extra_apis, store
 from .errors import UserError
 from .webhooks import register_webhook
 
@@ -159,6 +161,9 @@ async def auth_middleware(request, handler):
     elif request.path.startswith('/_config/'):
         is_auth = True
 
+    elif request.path.startswith('/_status'):
+        is_auth = True
+
     else:
         # There are exceptions (for example POST /v1/tokens, POST /v1/sources)
         # where authentication can be done using the public key (passed as
@@ -169,6 +174,7 @@ async def auth_middleware(request, handler):
                 r'^/v1/tokens$',
                 r'^/v1/sources$',
                 r'^/v1/payment_intents/\w+/_authenticate\b',
+                r'^/v1/payment_methods$',
                 r'^/v1/setup_intents/\w+/confirm$',
                 r'^/v1/setup_intents/\w+/cancel$',
             )))
@@ -200,7 +206,10 @@ async def save_store_middleware(request, handler):
             store.dump_to_disk()
 
 
+norm_path_middleware = web.normalize_path_middleware(append_slash=False,
+                                                     remove_slash=True)
 app = web.Application(middlewares=[error_middleware, auth_middleware,
+                                   norm_path_middleware,
                                    save_store_middleware])
 app.on_response_prepare.append(add_cors_headers)
 
@@ -273,10 +282,10 @@ for method, url, func in extra_apis:
     app.router.add_route(method, url, api_extra(func, url))
 
 
-for cls in (BalanceTransaction, Charge, Coupon, Customer, Event, Invoice,
-            InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan, Product,
-            Refund, SetupIntent, Source, Subscription, SubscriptionItem,
-            TaxRate, Token):
+for cls in (Account, BalanceTransaction, Charge, Coupon, Customer, Event,
+            Invoice, InvoiceItem, PaymentIntent, PaymentMethod, Payout, Plan,
+            Product, Refund, SetupIntent, Source, Subscription,
+            SubscriptionItem, TaxRate, Token, WebhookEndpoint):
     for method, url, func in (
             ('POST', '/v1/' + cls.object + 's', api_create),
             ('GET', '/v1/' + cls.object + 's/{id}', api_retrieve),
@@ -302,12 +311,14 @@ async def config_webhook(request):
     url = data.get('url', None)
     secret = data.get('secret', None)
     events = data.get('events', None)
+    expand = data.pop('expand', None)
     if not url or not secret or not url.startswith('http'):
         raise UserError(400, 'Bad request')
     if events is not None and type(events) is not list:
         raise UserError(400, 'Bad request')
     register_webhook(id, url, secret, events)
-    return web.Response()
+    wh = WebhookEndpoint(id=id, url=url, enabled_events=events, _secret=secret)
+    return json_response(wh._export(expand=expand))
 
 
 async def flush_store(request):
@@ -315,16 +326,37 @@ async def flush_store(request):
     return web.Response()
 
 
+async def get_status(request):
+    return web.Response(text='{"status": "ok"}\n',
+                        content_type='application/json')
+
+
 app.router.add_post('/_config/webhooks/{id}', config_webhook)
 app.router.add_delete('/_config/data', flush_store)
+app.router.add_get('/_status', get_status)
+
+
+class AccessLogger(AbstractAccessLogger):
+    def log(self, request, response, time):
+        if request.path.startswith('/_status'):
+            return
+
+        self.logger.info(f'{request.remote} '
+                         f'"{request.method} {request.path}" '
+                         f'done in {time}s: {response.status}')
 
 
 def start():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8420)
     parser.add_argument('--from-scratch', action='store_true')
+    parser.add_argument('--config', action='store_true')
+    parser.add_argument('--no-save', default=False, action='store_true')
     args = parser.parse_args()
 
+    store.save_to_disk = not args.no_save
+    if args.config:
+        store.load_from_config(sys.stdin)
     if not args.from_scratch:
         store.try_load_from_disk()
 
@@ -337,7 +369,10 @@ def start():
     logger.setLevel(logging.DEBUG)
     logger.addHandler(logging.StreamHandler())
 
-    web.run_app(app, sock=sock, access_log=logger)
+    web.run_app(app,
+                sock=sock,
+                access_log=logger,
+                access_log_class=AccessLogger)
 
 
 if __name__ == '__main__':

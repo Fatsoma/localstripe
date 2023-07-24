@@ -18,7 +18,22 @@
 // First, get the domain from which this script is pulled:
 const LOCALSTRIPE_SOURCE = (function () {
   const scripts = document.getElementsByTagName('script');
-  const src = scripts[scripts.length - 1].src;
+  var src;
+
+  for (var i = 0; i < scripts.length; i++) {
+    src = scripts[i].src;
+    if (!src) {
+      continue;
+    }
+
+    var m = src.match(/((?:https?:)\/\/[^\/]*)\/js\.stripe\.com\/v3/);
+    if (m) {
+      return m[1];
+    }
+  }
+
+  // fallback on last script tag
+  src = scripts[scripts.length - 1].src;
   return src.match(/https?:\/\/[^\/]*/)[0];
 })();
 
@@ -80,10 +95,11 @@ function openModal(text, confirmText, cancelText) {
 }
 
 class Element {
-  constructor(stripeElements) {
+  constructor(stripeElements, type) {
     // Element needs a reference to the object that created it, in order to
     // thoroughly destroy() itself.
     this._stripeElements = stripeElements;
+    this._type = type;
     this.listeners = {};
     this._domChildren = [];
   }
@@ -96,7 +112,7 @@ class Element {
                       'a valid DOM element or selector.');
     }
 
-    if (this._stripeElements._cardElement !== this) {
+    if (this._stripeElements._elements[this._type] !== this) {
       throw new Error('This Element has already been destroyed. Please ' +
                       'create a new one.');
     }
@@ -113,40 +129,81 @@ class Element {
     labelSpan.textContent = 'localstripe: ';
     this._domChildren.push(labelSpan);
 
-    this._inputs = {
-      number: null,
-      exp_month: null,
-      exp_year: null,
-      cvc: null,
-      postal_code: null,
-    };
+    switch (this._type) {
+      case 'cardNumber':
+        this._inputs = {
+          number: null,
+        };
+        break;
+      case 'cardExpiry':
+        this._inputs = {
+          exp_month: null,
+          exp_year: null,
+        };
+        break;
+      case 'cardCvc':
+        this._inputs = {
+          cvc: null,
+        };
+        break;
+      default:
+        this._inputs = {
+          number: null,
+          exp_month: null,
+          exp_year: null,
+          cvc: null,
+          postal_code: null,
+        };
+        break;
+    }
 
     const changed = event => {
       this.value = {
         card: {
-          number: this._inputs.number.value,
-          exp_month: this._inputs.exp_month.value,
-          exp_year: '20' + this._inputs.exp_year.value,
-          cvc: this._inputs.cvc.value,
+          number: this._inputs.number && this._inputs.number.value,
+          exp_month: this._inputs.exp_month && this._inputs.exp_month.value,
+          exp_year: this._inputs.exp_year && '20' + this._inputs.exp_year.value,
+          cvc: this._inputs.cvc && this._inputs.cvc.value,
         },
-        postal_code: this._inputs.postal_code.value,
+        postal_code: this._inputs.postal_code && this._inputs.postal_code.value,
+      };
+      var evt = {
+        elementType: this._type,
+        empty: event.target.value.length == 0,
+        complete: false,
+        error: null,
+        brand: this._cardBrand(),
+      };
+
+      switch (event.target) {
+        case this._inputs.number:
+          var numberLen = evt.brand == 'amex' ? 15 : 16;
+          if (this.value.card.number.length >= numberLen) {
+            evt.complete = true;
+            this._inputs.exp_month && this._inputs.exp_month.focus();
+          }
+          break;
+        case this._inputs.exp_month:
+          if (parseInt(this.value.card.exp_month) > 1) {
+            evt.complete = true;
+            this._inputs.exp_year && this._inputs.exp_year.focus();
+          }
+          break;
+        case this._inputs.exp_year:
+          if (this.value.card.exp_year.length >= 4) {
+            evt.complete = true;
+            this._inputs.cvc && this._inputs.cvc.focus();
+          }
+          break;
+        case this._inputs.cvc:
+          if (this.value.card.cvc.length >= 3) {
+            evt.complete = true;
+            this._inputs.postal_code && this._inputs.postal_code.focus();
+          }
+          break;
       }
 
-      if (event.target === this._inputs.number &&
-          this.value.card.number.length >= 16) {
-        this._inputs.exp_month.focus();
-      } else if (event.target === this._inputs.exp_month &&
-                 parseInt(this.value.card.exp_month) > 1) {
-        this._inputs.exp_year.focus();
-      } else if (event.target === this._inputs.exp_year &&
-                 this.value.card.exp_year.length >= 4) {
-        this._inputs.cvc.focus();
-      } else if (event.target === this._inputs.cvc &&
-                 this.value.card.cvc.length >= 3) {
-        this._inputs.postal_code.focus();
-      }
-
-      (this.listeners['change'] || []).forEach(handler => handler());
+      (this.listeners['change'] || []).forEach(handler => handler(evt));
     };
 
     Object.keys(this._inputs).forEach(field => {
@@ -157,10 +214,39 @@ class Element {
                                        field === 'postal_code' ? 5 :
                                        field === 'cvc' ? 3 : 2);
       this._inputs[field].oninput = changed;
+      this._inputs[field].onblur = () => {
+        (this.listeners['blur'] || []).forEach(handler => handler());
+      };
+      this._inputs[field].onfocus = () => {
+        (this.listeners['focus'] || []).forEach(handler => handler());
+      }
       this._domChildren.push(this._inputs[field]);
     });
 
     this._domChildren.forEach((child) => domElement.appendChild(child));
+    (this.listeners['ready'] || []).forEach(handler => handler());
+  }
+
+  _cardBrand() {
+    if (!this._inputs.number) {
+      return 'unknown';
+    }
+
+    const brands = {
+      'visa': '^4',
+      'mastercard': '^(?:2(?:22[1-9]|2[3-9]|[3-6]|7[01]|720)|5[1-5])',
+      'amex': '^3[47]',
+      'discover': '^6(?:011|22|4[4-9]|5)',
+      'diners': '^36',
+      'jcb': '^35(?:2[89]|[3-8])',
+      'unionpay': '^62',
+    }
+    Object.keys(brands).forEach(brand => {
+      if (this._inputs.number.value.match(brands[brand])) {
+        return brand;
+      }
+    });
+    return 'unknown';
   }
 
   unmount() {
@@ -172,8 +258,36 @@ class Element {
 
   destroy() {
     this.unmount();
-    if (this._stripeElements._cardElement === this) {
-      this._stripeElements._cardElement = null;
+    if (this._stripeElements._elements[this._type] === this) {
+      this._stripeElements._elements[this._type] = null;
+    }
+  }
+
+  blur() {
+    Object.keys(this._inputs).forEach(field => {
+      this._inputs[field].blur();
+    });
+    (this.listeners['blur'] || []).forEach(handler => handler());
+  }
+
+  focus() {
+    var field = Object.keys(this._inputs)[0];
+    this._inputs[field].focus();
+    (this.listeners['focus'] || []).forEach(handler => handler());
+  }
+
+  clear() {
+    Object.keys(this._inputs).forEach(field => {
+      this._inputs[field].value = '';
+    });
+  }
+
+  update(options) {
+    if (!options) {
+      return;
+    }
+    if (options.value && options.value.postalCode && this._inputs.postal_code) {
+      this._inputs.postal_code.value = options.value.postalCode;
     }
   }
 
@@ -181,22 +295,35 @@ class Element {
     this.listeners[event] = this.listeners[event] || [];
     this.listeners[event].push(handler);
   }
+
+  off(event, handler) {
+    if (handler) {
+      var i = this.listeners[event].indexOf(handler);
+      this.listeners[event].splice(i, 1);
+    } else {
+      delete this.listeners[event];
+    }
+  }
 }
 
-Stripe = (apiKey) => {
-  return {
+function Stripe(apiKey) {
+  var _elements = {};
+  return window.stripe = {
     elements: () => {
       return {
-        _cardElement: null,
+        _elements: _elements,
         create: function(type, options) {
-          if (this._cardElement) {
-            throw new Error("Can only create one Element of type card");
+          if (this._elements[type]) {
+            throw new Error('Can only create one Element of type ' + type);
           }
-          this._cardElement = new Element(this);
-          return this._cardElement;
+          if (!['card', 'cardNumber', 'cardExpiry', 'cardCvc'].includes(type)) {
+            throw new Error('Element type not supported: ' + type);
+          }
+          this._elements[type] = new Element(this, type);
+          return this._elements[type];
         },
         getElement: function(type) {
-          return this._cardElement;
+          return this._elements[type];
         }
       };
     },
@@ -334,7 +461,7 @@ Stripe = (apiKey) => {
             ...data.payment_method_data,
           }});
       },
-    confirmCardPayment: async (clientSecret, data) => {
+    confirmCardPayment: async (clientSecret, data, options) => {
       console.log('localstripe: Stripe().confirmCardPayment()');
       try {
         const success = await openModal(
@@ -401,9 +528,98 @@ Stripe = (apiKey) => {
       }
     },
 
-    createPaymentMethod: async () => {},
+    createPaymentMethod: async (dataOrType, dataOrElement, legacyData) => {
+      console.log('localstripe: Stripe().createPaymentMethod()');
+      try {
+        let data, element;
+        let card = {};
+        if (typeof dataOrType === 'string') {
+          if (dataOrElement && dataOrElement.constructor && dataOrElement.constructor.name === 'Element') {
+            data = legacyData;
+            element = dataOrElement;
+          } else {
+            data = dataOrElement;
+          }
+          if (data.type && data.type !== dataOrType) {
+            return {error: 'The type supplied in payment_method_data is not consistent.'};
+          }
+          data.type = dataOrType;
+        } else {
+          data = dataOrType;
+          element = data.card;
+        }
+
+        if (element) {
+          let types = ['card', 'cardNumber', 'cardExpiry', 'cardCvc'];
+          types.forEach(type => {
+            let elem = element._stripeElements.getElement(type);
+            if (elem) {
+              Object.keys(elem._inputs).forEach(field => {
+                card[field] = elem._inputs[field].value;
+              });
+            }
+          });
+        }
+
+        const url = `${LOCALSTRIPE_SOURCE}/v1/payment_methods`;
+        let response = await fetch(url, {
+          method: 'POST',
+          body: JSON.stringify({
+            key: apiKey,
+            type: data.type,
+            card: card,
+            billing_details: data.billing_details,
+          }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (response.status !== 200 || body.error) {
+          return {error: body.error};
+        } else {
+          return {paymentMethod: body};
+        }
+      } catch (err) {
+        if (typeof err === 'object' && err.error) {
+          return err;
+        } else {
+          return {error: err};
+        }
+      }
+    },
+
+    confirmPaymentIntent: // deprecated
+      async function(clientSecret, data) {
+        return this.confirmCardPayment(clientSecret, data, {
+          handleActions: false,
+        });
+      },
+
+    paymentRequest: function() {
+      return {
+        listeners: [],
+        abort: () => {},
+        canMakePayment: () => {
+          return new Promise(resolve => {
+            resolve(null);
+          });
+        },
+        show: () => {},
+        update: () => {},
+        on: (event, handler) => {
+          this.listeners[event] = this.listeners[event] || [];
+          this.listeners[event].push(handler);
+        },
+        off: (event, handler) => {
+          if (handler) {
+            var i = this.listeners[event].indexOf(handler);
+            this.listeners[event].splice(i, 1);
+          } else {
+            delete this.listeners[event];
+          }
+        }
+      };
+    },
   };
-};
+}
 
 console.log('localstripe: The Stripe object was just replaced in the page. ' +
             'Stripe elements created from now on will be fake ones, ' +

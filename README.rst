@@ -51,21 +51,17 @@ Then simply run the command ``localstripe``. The fake Stripe server is now
 listening on port 8420.
 
 Or launch a container using `the Docker image
-<https://hub.docker.com/r/adrienverge/localstripe/>`_:
+<https://hub.docker.com/r/fatsoma/localstripe/>`_:
 
 .. code:: shell
 
- docker run -p 8420:8420 adrienverge/localstripe:latest
+ make docker-run ENV=development
 
 Docker image can be rebuilt using:
 
 .. code::
 
- docker build --no-cache -t adrienverge/localstripe -<<EOF
- FROM python:3
- RUN pip install localstripe
- CMD ["localstripe"]
- EOF
+ docker build --no-cache -t fatsoma/localstripe .
 
 Examples
 --------
@@ -215,6 +211,8 @@ Only those events types are currently supported:
   ``customer.subscription.deleted``
 - Invoice: ``invoice.created``, ``invoice.payment_succeeded`` and
   ``invoice.payment_failed``
+- PaymentIntent: ``payment_intent.created``, ``payment_intent.succeeded``, ``payment_intent.payment_failed`` and ``payment_intent.canceled``
+- PaymentMethod: ``payment_method.attached``, ``payment_method.detached``
 
 Flush stored data
 -----------------
